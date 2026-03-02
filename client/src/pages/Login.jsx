@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
+import nbaLogo from "../assets/National_Board_of_Accreditation.svg.png";
 
-const GOOGLE_CLIENT_ID =
-  "375289431515-nlhqdrj9pf71pbns2203or4iurmhfk3f.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 const Login = () => {
   const navigate = useNavigate();
@@ -36,9 +36,10 @@ const Login = () => {
           {
             theme: "outline",
             size: "large",
-            width: 300,
+            width: 320,
             text: "signin_with",
             shape: "rectangular",
+            logo_alignment: "center",
           },
         );
       }
@@ -68,7 +69,9 @@ const Login = () => {
   if (isLoading) {
     return (
       <div className="login-container">
-        <div className="loading">Loading...</div>
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+        </div>
       </div>
     );
   }
@@ -76,9 +79,24 @@ const Login = () => {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1>Welcome to NBA</h1>
-        <p>Sign in to continue</p>
-        <div id="google-signin-button"></div>
+        <div className="login-header">
+          <h1 className="brand-title">BIT NBA</h1>
+          <p className="brand-subtitle">Where Quality Meets Opportunity!</p>
+        </div>
+        
+        <div className="login-content">
+          <h2 className="welcome-text">Welcome back!</h2>
+          
+          <div className="login-icon">
+            <img src={nbaLogo} alt="Logo" className="login-logo" />
+          </div>
+          
+          <div className="google-btn-wrapper">
+            <div id="google-signin-button"></div>
+          </div>
+          
+          <p className="login-footer">Login in with bitsathy mail id.</p>
+        </div>
       </div>
     </div>
   );
