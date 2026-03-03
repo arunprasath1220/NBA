@@ -68,34 +68,34 @@ const Login = () => {
 
   if (isLoading) {
     return (
-      <div className="login-container">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
+      <div className="flex justify-center items-center min-h-screen w-full fixed top-0 left-0 bg-gray-100">
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <h1 className="brand-title">BIT NBA</h1>
-          <p className="brand-subtitle">Where Quality Meets Opportunity!</p>
+    <div className="flex justify-center items-center min-h-screen w-full fixed top-0 left-0 bg-gray-100">
+      <div className="bg-white pt-10 px-12 pb-8 rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.08)] text-center max-w-[420px] w-full">
+        <div className="mb-6">
+          <h1 className="text-[#0095ff] text-[1.75rem] font-bold italic tracking-wide mb-1">BIT NBA</h1>
+          <p className="text-gray-500 text-[0.9rem] font-normal">Where Quality Meets Opportunity!</p>
         </div>
         
-        <div className="login-content">
-          <h2 className="welcome-text">Welcome back!</h2>
+        <div className="flex flex-col items-center">
+          <h2 className="text-gray-800 text-2xl font-semibold mb-5">Welcome back!</h2>
           
-          <div className="login-icon">
-            <img src={nbaLogo} alt="Logo" className="login-logo" />
+          <div className="mb-6">
+            <img src={nbaLogo} alt="Logo" className="w-20 h-auto" />
           </div>
           
-          <div className="google-btn-wrapper">
+          <div className="w-full mb-4 flex justify-center">
             <div id="google-signin-button"></div>
           </div>
           
-          <p className="login-footer">Login in with bitsathy mail id.</p>
+          <p className="text-gray-400 text-[0.85rem] mt-2">Login in with bitsathy mail id.</p>
         </div>
       </div>
     </div>

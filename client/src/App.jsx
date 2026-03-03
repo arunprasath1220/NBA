@@ -22,8 +22,8 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="app-loading">
-        <div className="loading">Loading...</div>
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="flex justify-center items-center min-h-screen text-2xl text-[#333]">Loading...</div>
       </div>
     );
   }

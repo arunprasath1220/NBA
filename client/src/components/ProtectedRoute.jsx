@@ -25,9 +25,9 @@ const ProtectedRoute = ({
   // Show loading while checking authentication
   if (isLoading) {
     return (
-      <div className="protected-route-loading">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
+      <div className="flex justify-center items-center min-h-screen w-full">
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
         </div>
       </div>
     );
