@@ -208,16 +208,40 @@ const InstituteProfile = () => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="pt-16 lg:pt-14">
-          {/* Edit Button - Only for admin */}
-          {isAdmin() && !isEditing && (
-            <div className="flex justify-end px-4 py-2">
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium text-sm rounded shadow"
-              >
-                Edit
-              </button>
+          {/* Edit/Back Link - Only for admin */}
+          {isAdmin() && (
+            <div className="flex justify-between items-center px-4 py-2">
+              {/* Left side - Edit mode indicator */}
+              <div>
+                {isEditing && (
+                  <span className="text-gray-500 text-sm">You are in edit page</span>
+                )}
+              </div>
+              
+              {/* Right side - Edit/Back link */}
+              <div>
+                {isEditing ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      fetchInstituteProfile();
+                      setMessage({ type: "", text: "" });
+                    }}
+                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                  >
+                    Back to page
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
             </div>
           )}
           
@@ -228,8 +252,8 @@ const InstituteProfile = () => {
             </div>
           )}
           
-          <form onSubmit={handleSubmit} className={`w-full transition-all duration-300 ${isEditing ? 'p-4 bg-gray-50 shadow-lg rounded-lg mx-2' : ''}`}>
-            <table className="w-full border-collapse bg-white text-sm" style={{ borderSpacing: 0 }}>
+          <form onSubmit={handleSubmit} className="w-full transition-all duration-300 px-4">
+            <table className="w-full border-collapse bg-white text-sm table-fixed" style={{ borderSpacing: 0 }}>
                 <tbody>
                   {/* A1. Name of the Institute */}
                   <tr>
@@ -579,19 +603,7 @@ const InstituteProfile = () => {
 
               {/* Submit Button - Only show when editing */}
               {isEditing && (
-                <div className="flex justify-end gap-4 mt-4 pr-4 pb-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditing(false);
-                      fetchInstituteProfile();
-                      setMessage({ type: "", text: "" });
-                    }}
-                    className="px-6 py-2 border border-gray-400 text-gray-700 bg-white hover:bg-gray-50 transition-colors font-medium text-sm rounded"
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </button>
+                <div className="flex justify-end mt-4 pr-4 pb-4">
                   <button
                     type="submit"
                     className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 rounded"
