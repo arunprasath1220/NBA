@@ -7,7 +7,7 @@ const Unauthorized = () => {
 
   const handleGoBack = () => {
     if (isAuthenticated) {
-      navigate("/dashboard");
+      navigate("/institute-profile");
     } else {
       navigate("/login");
     }

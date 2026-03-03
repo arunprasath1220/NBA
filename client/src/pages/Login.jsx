@@ -12,7 +12,7 @@ const Login = () => {
   useEffect(() => {
     // Redirect if already authenticated
     if (isAuthenticated && !isLoading) {
-      navigate("/dashboard");
+      navigate("/institute-profile");
       return;
     }
 
@@ -59,7 +59,7 @@ const Login = () => {
     if (response.credential) {
       const result = await googleLogin(response.credential);
       if (result.success) {
-        navigate("/dashboard");
+        navigate("/institute-profile");
       } else {
         alert("Login failed: " + (result.error || "Unknown error"));
       }
@@ -68,7 +68,7 @@ const Login = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen w-full fixed top-0 left-0 bg-gray-100">
+      <div className="flex justify-center items-center min-h-screen w-full fixed top-0 left-0 bg-[#f9fafb]">
         <div className="flex justify-center items-center min-h-screen">
           <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
         </div>
@@ -77,7 +77,7 @@ const Login = () => {
   }
 
   return (
-    <div className="flex justify-center items-center min-h-screen w-full fixed top-0 left-0 bg-gray-100">
+    <div className="flex justify-center items-center min-h-screen w-full fixed top-0 left-0 bg-[#f9fafb]">
       <div className="bg-white pt-10 px-12 pb-8 rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.08)] text-center max-w-[420px] w-full">
         <div className="mb-6">
           <h1 className="text-[#0095ff] text-[1.75rem] font-bold italic tracking-wide mb-1">BIT NBA</h1>

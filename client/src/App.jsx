@@ -6,7 +6,14 @@ import {
   Navigate,
 } from "react-router-dom";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
+import InstituteProfile from "./pages/InstituteProfile";
+import AllPrograms from "./pages/AllPrograms";
+import ProgramsByDepartment from "./pages/ProgramsByDepartment";
+import AlliedDepartment from "./pages/AlliedDepartment";
+import FacultyByDepartment from "./pages/FacultyByDepartment";
+import FacultyByAllied from "./pages/FacultyByAllied";
+import RatioByDepartment from "./pages/RatioByDepartment";
+import RatioByAllied from "./pages/RatioByAllied";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
 import useAuthStore from "./store/authStore";
@@ -37,43 +44,75 @@ function App() {
 
         {/* Protected Routes - Any authenticated user */}
         <Route
-          path="/dashboard"
+          path="/institute-profile"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <InstituteProfile />
             </ProtectedRoute>
           }
         />
-
-        {/* Admin Only Routes Example */}
-        {/*
         <Route
-          path="/admin"
+          path="/all-programs"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <AdminPanel />
+            <ProtectedRoute>
+              <AllPrograms />
             </ProtectedRoute>
           }
         />
-        */}
-
-        {/* User Routes - admin or user role */}
-        {/*
         <Route
-          path="/profile"
+          path="/programs-department"
           element={
-            <ProtectedRoute allowedRoles={["admin", "user"]}>
-              <Profile />
+            <ProtectedRoute>
+              <ProgramsByDepartment />
             </ProtectedRoute>
           }
         />
-        */}
+        <Route
+          path="/allied-department"
+          element={
+            <ProtectedRoute>
+              <AlliedDepartment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/faculty-department"
+          element={
+            <ProtectedRoute>
+              <FacultyByDepartment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/faculty-allied"
+          element={
+            <ProtectedRoute>
+              <FacultyByAllied />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ratio-department"
+          element={
+            <ProtectedRoute>
+              <RatioByDepartment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ratio-allied"
+          element={
+            <ProtectedRoute>
+              <RatioByAllied />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Catch all - redirect to dashboard or login */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* Catch all - redirect to institute profile */}
+        <Route path="*" element={<Navigate to="/institute-profile" replace />} />
       </Routes>
     </Router>
   );
