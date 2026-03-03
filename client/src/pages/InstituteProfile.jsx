@@ -207,10 +207,10 @@ const InstituteProfile = () => {
       <Navbar />
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
-        <div className="pt-16 lg:pt-14">
+        <div className="pt-16 lg:pt-14 p-4">
           {/* Edit/Back Link - Only for admin */}
-          {isAdmin() && (
-            <div className="flex justify-between items-center px-4 py-2">
+          {isAdmin() ? (
+            <div className="flex justify-between items-center py-2">
               {/* Left side - Edit mode indicator */}
               <div>
                 {isEditing && (
@@ -243,6 +243,8 @@ const InstituteProfile = () => {
                 )}
               </div>
             </div>
+          ) : (
+            <div className="py-4"></div>
           )}
           
           {/* Draft Saved Indicator */}
@@ -252,7 +254,7 @@ const InstituteProfile = () => {
             </div>
           )}
           
-          <form onSubmit={handleSubmit} className="w-full transition-all duration-300 px-4">
+          <form onSubmit={handleSubmit} className="w-full transition-all duration-300">
             <table className="w-full border-collapse bg-white text-sm table-fixed" style={{ borderSpacing: 0 }}>
                 <tbody>
                   {/* A1. Name of the Institute */}
@@ -603,7 +605,7 @@ const InstituteProfile = () => {
 
               {/* Submit Button - Only show when editing */}
               {isEditing && (
-                <div className="flex justify-end mt-4 pr-4 pb-4">
+                <div className="flex justify-end mt-4">
                   <button
                     type="submit"
                     className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 rounded"
