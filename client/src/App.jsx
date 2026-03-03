@@ -7,6 +7,8 @@ import {
 } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Unauthorized from "./pages/Unauthorized";
+import ProtectedRoute from "./components/ProtectedRoute";
 import useAuthStore from "./store/authStore";
 import "./App.css";
 
@@ -29,9 +31,49 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/unauthorized" element={<Unauthorized />} />
+
+        {/* Protected Routes - Any authenticated user */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin Only Routes Example */}
+        {/*
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdminPanel />
+            </ProtectedRoute>
+          }
+        />
+        */}
+
+        {/* User Routes - admin or user role */}
+        {/*
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "user"]}>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        */}
+
+        {/* Default redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
+
+        {/* Catch all - redirect to dashboard or login */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );

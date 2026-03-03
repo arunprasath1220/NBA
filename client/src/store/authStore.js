@@ -2,10 +2,31 @@ import { create } from "zustand";
 
 const API_URL = "http://localhost:5000/api";
 
-const useAuthStore = create((set) => ({
+const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+
+  // Check if user has a specific role
+  hasRole: (role) => {
+    const { user } = get();
+    if (!user || !user.roles) return false;
+    return user.roles.includes(role);
+  },
+
+  // Check if user is admin
+  isAdmin: () => {
+    const { user } = get();
+    if (!user || !user.roles) return false;
+    return user.roles.includes("admin");
+  },
+
+  // Check if user has any of the specified roles
+  hasAnyRole: (...roles) => {
+    const { user } = get();
+    if (!user || !user.roles) return false;
+    return roles.some((role) => user.roles.includes(role));
+  },
 
   // Google login
   googleLogin: async (credential) => {

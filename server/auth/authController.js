@@ -40,8 +40,8 @@ const googleLogin = async (req, res) => {
 
     // Only allow existing users
     if (existingUsers.length === 0) {
-      return res.status(403).json({ 
-        error: "User not registered. Please contact admin to register." 
+      return res.status(403).json({
+        error: "User not registered. Please contact admin to register.",
       });
     }
 
@@ -170,9 +170,34 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Middleware to authorize based on roles
+// Usage: authorizeRoles("admin") or authorizeRoles("admin", "user")
+const authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ error: "Access denied. Not authenticated." });
+    }
+
+    const userRoles = req.user.roles || [];
+    const hasPermission = allowedRoles.some((role) => userRoles.includes(role));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        error:
+          "Access denied. You do not have permission to access this resource.",
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = {
   googleLogin,
   getCurrentUser,
   logout,
   authenticateToken,
+  authorizeRoles,
 };
