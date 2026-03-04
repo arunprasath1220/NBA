@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 const API_URL = "http://localhost:5000/api";
 const DRAFT_STORAGE_KEY = "institute_profile_draft";
@@ -14,6 +16,7 @@ const InstituteProfile = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -167,16 +170,19 @@ const InstituteProfile = () => {
 
       if (data.success) {
         setMessage({ type: "success", text: data.message || "Profile saved successfully!" });
+        setSnackbarOpen(true);
         // Clear draft from localStorage after successful save
         localStorage.removeItem(DRAFT_STORAGE_KEY);
         // Exit edit mode after successful save
         setIsEditing(false);
       } else {
         setMessage({ type: "error", text: data.error || "Failed to save profile" });
+        setSnackbarOpen(true);
       }
     } catch (error) {
       console.error("Error saving institute profile:", error);
       setMessage({ type: "error", text: "Failed to save profile. Please try again." });
+      setSnackbarOpen(true);
     } finally {
       setIsSaving(false);
     }
@@ -592,16 +598,50 @@ const InstituteProfile = () => {
                 </tbody>
               </table>
 
-              {/* Message Display */}
-              {message.text && (
-                <div className={`mt-4 p-3 rounded ${
-                  message.type === "success" 
-                    ? "bg-green-100 text-green-700 border border-green-300" 
-                    : "bg-red-100 text-red-700 border border-red-300"
-                }`}>
+              {/* Snackbar Notification */}
+              <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={3000}
+                onClose={() => setSnackbarOpen(false)}
+                anchorOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <Alert
+                  onClose={() => setSnackbarOpen(false)}
+                  severity={message.type === "success" ? "success" : "error"}
+                  variant="standard"
+                  sx={{
+                    minWidth: 300,
+                    borderRadius: "4px",
+                    backgroundColor: "#fff",
+                    border: message.type === "success" 
+                      ? "1px solid #d1d5db" 
+                      : "1px solid #d1d5db",
+                    borderLeft: message.type === "success"
+                      ? "4px solid #059669"
+                      : "4px solid #dc2626",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+                    color: "#374151",
+                    fontWeight: 400,
+                    fontSize: "0.875rem",
+                    padding: "8px 16px",
+                    "& .MuiAlert-icon": {
+                      color: message.type === "success" ? "#059669" : "#dc2626",
+                      opacity: 0.9,
+                    },
+                    "& .MuiAlert-action": {
+                      padding: 0,
+                      "& .MuiIconButton-root": {
+                        color: "#6b7280",
+                        "&:hover": {
+                          backgroundColor: "#f3f4f6",
+                        },
+                      },
+                    },
+                  }}
+                >
                   {message.text}
-                </div>
-              )}
+                </Alert>
+              </Snackbar>
 
               {/* Submit Button - Only show when editing */}
               {isEditing && (
