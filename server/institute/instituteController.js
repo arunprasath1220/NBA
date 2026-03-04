@@ -1,6 +1,29 @@
 const pool = require("../db");
 
 /**
+ * Get Program Names
+ * Returns all program names from the program_name table
+ */
+const getProgramNames = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT id, coursename FROM program_name ORDER BY coursename ASC"
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching program names:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch program names",
+    });
+  }
+};
+
+/**
  * Get Institute Profile
  * Returns the institute profile data (single record)
  * Accessible by both admin and user
@@ -23,6 +46,7 @@ const getInstituteProfile = async (req, res) => {
     const profile = rows[0];
     const mappedData = {
       id: profile.id,
+      programAppliedFor: profile.program_applied_for || "",
       tire: profile.tier || "",
       instituteName: profile.institute_name || "",
       yearOfEstablishment: profile.year_of_establishment || "",
@@ -70,6 +94,7 @@ const getInstituteProfile = async (req, res) => {
 const saveInstituteProfile = async (req, res) => {
   try {
     const {
+      programAppliedFor,
       tire,
       instituteName,
       yearOfEstablishment,
@@ -125,6 +150,7 @@ const saveInstituteProfile = async (req, res) => {
       // Update existing profile
       const [result] = await pool.execute(
         `UPDATE institute_program_details SET
+          program_applied_for = ?,
           tier = ?,
           institute_name = ?,
           year_of_establishment = ?,
@@ -150,6 +176,7 @@ const saveInstituteProfile = async (req, res) => {
           university_pin_code = ?
         WHERE id = ?`,
         [
+          toStringOrNull(programAppliedFor),
           toStringOrNull(tire),
           instituteName,
           toIntOrNull(yearOfEstablishment),
@@ -186,6 +213,7 @@ const saveInstituteProfile = async (req, res) => {
       // Create new profile
       const [result] = await pool.execute(
         `INSERT INTO institute_program_details (
+          program_applied_for,
           tier,
           institute_name,
           year_of_establishment,
@@ -209,8 +237,9 @@ const saveInstituteProfile = async (req, res) => {
           university_city,
           university_state,
           university_pin_code
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          toStringOrNull(programAppliedFor),
           toStringOrNull(tire),
           instituteName,
           toIntOrNull(yearOfEstablishment),
@@ -253,6 +282,7 @@ const saveInstituteProfile = async (req, res) => {
 };
 
 module.exports = {
+  getProgramNames,
   getInstituteProfile,
   saveInstituteProfile,
 };

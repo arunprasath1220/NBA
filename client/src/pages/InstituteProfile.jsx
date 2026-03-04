@@ -20,6 +20,8 @@ const InstituteProfile = () => {
   const [draftSaved, setDraftSaved] = useState(false);
 
   const [formData, setFormData] = useState({
+    // Program Applied For
+    programAppliedFor: "",
     // A1. Name of the Institute
     instituteName: "",
     yearOfEstablishment: "",
@@ -52,6 +54,8 @@ const InstituteProfile = () => {
     tire: "",
   });
 
+  const [programNames, setProgramNames] = useState([]);
+
   // Fetch institute profile data
   const fetchInstituteProfile = async () => {
     try {
@@ -65,6 +69,7 @@ const InstituteProfile = () => {
 
       if (data.success && data.data) {
         setFormData({
+          programAppliedFor: data.data.programAppliedFor || "",
           instituteName: data.data.instituteName || "",
           yearOfEstablishment: data.data.yearOfEstablishment || "",
           location: data.data.location || "",
@@ -98,6 +103,24 @@ const InstituteProfile = () => {
     }
   };
 
+  // Fetch program names for dropdown
+  const fetchProgramNames = async () => {
+    try {
+      const response = await fetch(`${API_URL}/institute/programs`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setProgramNames(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching program names:", error);
+    }
+  };
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate("/login");
@@ -107,6 +130,7 @@ const InstituteProfile = () => {
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       fetchInstituteProfile();
+      fetchProgramNames();
     }
   }, [isAuthenticated, isLoading]);
 
@@ -263,6 +287,28 @@ const InstituteProfile = () => {
           <form onSubmit={handleSubmit} className="w-full transition-all duration-300">
             <table className="w-full border-collapse bg-white text-sm table-fixed" style={{ borderSpacing: 0 }}>
                 <tbody>
+                  {/* Name of the Program Applied for - Only show in view mode (not in edit page) */}
+                  {!isEditing && (
+                    <tr>
+                      <td colSpan={2} className="border border-gray-300 px-2 py-1.5">
+                        <span className="font-bold">Name of the Program Applied for</span>:
+                        <select
+                          name="programAppliedFor"
+                          value={formData.programAppliedFor}
+                          onChange={handleChange}
+                          className="bg-white border border-gray-300 rounded text-sm text-gray-900 ml-1 px-2 py-1 w-64 cursor-pointer"
+                        >
+                          <option value="">Select Program</option>
+                          {programNames.map((program) => (
+                            <option key={program.id} value={program.coursename}>
+                              {program.coursename}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  )}
+
                   {/* A1. Name of the Institute */}
                   <tr>
                     <td colSpan={2} className="border border-gray-300 px-2 py-1.5">

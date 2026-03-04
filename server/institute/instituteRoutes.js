@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const {
+  getProgramNames,
   getInstituteProfile,
   saveInstituteProfile,
 } = require("./instituteController");
@@ -12,9 +13,18 @@ const {
 /**
  * Institute Profile Routes
  * 
+ * GET  /api/institute/programs - Get all program names (authenticated users)
  * GET  /api/institute/profile - Get institute profile (authenticated users)
  * POST /api/institute/profile - Create/Update institute profile (admin only)
  */
+
+// Get program names - accessible by authenticated users
+router.get(
+  "/programs",
+  authenticateToken,
+  authorizeRoles("admin", "user"),
+  getProgramNames
+);
 
 // Get institute profile - accessible by authenticated users (admin and user)
 router.get(
