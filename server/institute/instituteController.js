@@ -70,6 +70,9 @@ const getInstituteProfile = async (req, res) => {
       universityCity: profile.university_city || "",
       universityState: profile.university_state || "",
       universityPinCode: profile.university_pin_code || "",
+      programName: profile.program_name || "",
+      discipline: profile.discipline || "",
+      level: profile.level || "",
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
     };

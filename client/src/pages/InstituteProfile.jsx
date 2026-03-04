@@ -52,6 +52,10 @@ const InstituteProfile = () => {
     ownershipStatus: "",
     // Tire
     tire: "",
+    // Program Details (view only)
+    programName: "",
+    discipline: "",
+    level: "",
   });
 
   const [programNames, setProgramNames] = useState([]);
@@ -93,6 +97,9 @@ const InstituteProfile = () => {
           institutionType: data.data.institutionType || "",
           ownershipStatus: data.data.ownershipStatus || "",
           tire: data.data.tire || "",
+          programName: data.data.programName || "",
+          discipline: data.data.discipline || "",
+          level: data.data.level || "",
         });
       }
     } catch (error) {
@@ -626,21 +633,27 @@ const InstituteProfile = () => {
                     </td>
                   </tr>
 
-                  {/* Tire */}
-                  <tr>
-                    <td colSpan={2} className="border border-gray-300 px-2 py-1.5">
-                      <span className="font-bold">Tire</span>:
-                      <input
-                        type="text"
-                        name="tire"
-                        value={formData.tire}
-                        onChange={handleChange}
-                        className={`${inputClass} ml-1 w-48`}
-                        readOnly={!isEditing}
-                        required
-                      />
-                    </td>
-                  </tr>
+                  {/* Program Details - Only show in view mode */}
+                  {!isEditing && (
+                    <>
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2 w-1/2">
+                          <span className="font-bold">Program Name</span> : {formData.programName}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2 w-1/2">
+                          <span className="font-bold">Discipline</span>: {formData.discipline}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2">
+                          <span className="font-bold">Level</span> : {formData.level}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2">
+                          <span className="font-bold">Tier</span>: {formData.tire}
+                        </td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
               </table>
 
