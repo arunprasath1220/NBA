@@ -24,6 +24,48 @@ const getProgramNames = async (req, res) => {
 };
 
 /**
+ * Get Program Details (Level and Discipline)
+ * Returns level and discipline for a given program ID from programname_level_discipline table
+ * Joins with program_level and discipline tables to get actual names
+ */
+const getProgramDetails = async (req, res) => {
+  try {
+    const { programId } = req.params;
+    
+    const [rows] = await pool.query(
+      `SELECT 
+        pl.level as level, 
+        d.discipline as discipline 
+      FROM programname_level_discipline pld
+      LEFT JOIN program_level pl ON pld.level = pl.id
+      LEFT JOIN discipline d ON pld.discipline = d.id
+      WHERE pld.name = ?`,
+      [programId]
+    );
+
+    console.log("Program details for ID", programId, ":", rows);
+
+    if (rows.length === 0) {
+      return res.json({
+        success: true,
+        data: { level: "", discipline: "" },
+      });
+    }
+
+    res.json({
+      success: true,
+      data: rows[0],
+    });
+  } catch (error) {
+    console.error("Error fetching program details:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch program details",
+    });
+  }
+};
+
+/**
  * Get Institute Profile
  * Returns the institute profile data (single record)
  * Accessible by both admin and user
@@ -286,6 +328,7 @@ const saveInstituteProfile = async (req, res) => {
 
 module.exports = {
   getProgramNames,
+  getProgramDetails,
   getInstituteProfile,
   saveInstituteProfile,
 };

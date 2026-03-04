@@ -128,6 +128,50 @@ const InstituteProfile = () => {
     }
   };
 
+  // Fetch program details (level, discipline) by program ID
+  const fetchProgramDetails = async (programId) => {
+    try {
+      const response = await fetch(`${API_URL}/institute/programs/${programId}/details`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setFormData((prev) => ({
+          ...prev,
+          level: data.data.level || "",
+          discipline: data.data.discipline || "",
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching program details:", error);
+    }
+  };
+
+  // Handle program selection - fetch level and discipline
+  const handleProgramChange = (e) => {
+    const selectedCoursename = e.target.value;
+    const selectedProgram = programNames.find((p) => p.coursename === selectedCoursename);
+    
+    setFormData((prev) => ({
+      ...prev,
+      programAppliedFor: selectedCoursename,
+    }));
+
+    if (selectedProgram) {
+      fetchProgramDetails(selectedProgram.id);
+    } else {
+      // Clear level and discipline if no program selected
+      setFormData((prev) => ({
+        ...prev,
+        level: "",
+        discipline: "",
+      }));
+    }
+  };
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate("/login");
@@ -302,7 +346,7 @@ const InstituteProfile = () => {
                         <select
                           name="programAppliedFor"
                           value={formData.programAppliedFor}
-                          onChange={handleChange}
+                          onChange={handleProgramChange}
                           className="bg-white border border-gray-300 rounded text-sm text-gray-900 ml-1 px-2 py-1 w-64 cursor-pointer"
                         >
                           <option value="">Select Program</option>
@@ -638,7 +682,7 @@ const InstituteProfile = () => {
                     <>
                       <tr>
                         <td className="border border-gray-300 px-3 py-2 w-1/2">
-                          <span className="font-bold">Program Name</span> : {formData.programName}
+                          <span className="font-bold">Program Name</span> : {formData.programAppliedFor}
                         </td>
                         <td className="border border-gray-300 px-3 py-2 w-1/2">
                           <span className="font-bold">Discipline</span>: {formData.discipline}

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   getProgramNames,
+  getProgramDetails,
   getInstituteProfile,
   saveInstituteProfile,
 } = require("./instituteController");
@@ -24,6 +25,14 @@ router.get(
   authenticateToken,
   authorizeRoles("admin", "user"),
   getProgramNames
+);
+
+// Get program details (level, discipline) - accessible by authenticated users
+router.get(
+  "/programs/:programId/details",
+  authenticateToken,
+  authorizeRoles("admin", "user"),
+  getProgramDetails
 );
 
 // Get institute profile - accessible by authenticated users (admin and user)
