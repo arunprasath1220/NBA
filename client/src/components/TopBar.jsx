@@ -10,7 +10,7 @@ const TopBar = () => {
     const pathMap = {
       "/institute-profile": "Institute Profile",
       "/all-programs": "All Programs",
-      "/programs-department": "Programs by Department",
+      "/allied-mapping": "Allied Course Mapping",
       "/allied-department": "Allied Department",
       "/faculty-department": "Faculty by Department",
       "/faculty-allied": "Faculty by Allied Dept.",

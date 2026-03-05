@@ -8,7 +8,7 @@ import {
 import Login from "./pages/Login";
 import InstituteProfile from "./pages/InstituteProfile";
 import AllPrograms from "./pages/AllPrograms";
-import ProgramsByDepartment from "./pages/ProgramsByDepartment";
+import AlliedCourseMapping from "./pages/AlliedCourseMapping";
 import AlliedDepartment from "./pages/AlliedDepartment";
 import FacultyByDepartment from "./pages/FacultyByDepartment";
 import FacultyByAllied from "./pages/FacultyByAllied";
@@ -60,10 +60,10 @@ function App() {
           }
         />
         <Route
-          path="/programs-department"
+          path="/allied-mapping"
           element={
             <ProtectedRoute>
-              <ProgramsByDepartment />
+              <AlliedCourseMapping />
             </ProtectedRoute>
           }
         />

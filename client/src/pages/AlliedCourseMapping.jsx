@@ -4,7 +4,7 @@ import useAuthStore from "../store/authStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 
-const ProgramsByDepartment = () => {
+const AlliedCourseMapping = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
 
@@ -34,7 +34,7 @@ const ProgramsByDepartment = () => {
         <div className="p-6 pt-16 lg:pt-14">
           <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-900">Programs by Department</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Allied Mapping</h1>
               {isAdmin() && (
                 <button
                   onClick={handleEdit}
@@ -46,7 +46,7 @@ const ProgramsByDepartment = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-gray-600">Programs by department will be displayed here.</p>
+              <p className="text-gray-600">Allied Course Mapping will be displayed here.</p>
             </div>
           </div>
         </div>
@@ -55,4 +55,4 @@ const ProgramsByDepartment = () => {
   );
 };
 
-export default ProgramsByDepartment;
+export default AlliedCourseMapping;

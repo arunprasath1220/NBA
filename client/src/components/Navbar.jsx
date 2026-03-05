@@ -70,7 +70,7 @@ const Navbar = () => {
       items: [
         { name: "Institute Profile", path: "/institute-profile", icon: Icons.building },
         { name: "All Programs", path: "/all-programs", icon: Icons.book },
-        { name: "Programs by Department", path: "/programs-department", icon: Icons.academic },
+        { name: "Allied Course Mapping", path: "/allied-mapping", icon: Icons.academic },
         { name: "Allied Department", path: "/allied-department", icon: Icons.link },
       ],
     },
