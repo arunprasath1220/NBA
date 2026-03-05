@@ -457,7 +457,18 @@ const addCourse = async (req, res) => {
     );
     const programNameId = programResult.insertId;
 
-    // Step 2: Insert into all_program table with foreign keys
+    // Step 2: Insert into programname_level_discipline table
+    await pool.execute(
+      `INSERT INTO programname_level_discipline (name, level, discipline) 
+       VALUES (?, ?, ?)`,
+      [
+        programNameId,
+        parseInt(levelId),
+        parseInt(disciplineId),
+      ]
+    );
+
+    // Step 3: Insert into all_program table with foreign keys
     const [courseResult] = await pool.execute(
       `INSERT INTO all_program (discipline, level, programname, department_name, year_start) 
        VALUES (?, ?, ?, ?, ?)`,
