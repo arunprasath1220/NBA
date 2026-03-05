@@ -28,6 +28,28 @@ const AllPrograms = () => {
   const [courses, setCourses] = useState([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
 
+  // State for academic year filter
+  const [academicYear, setAcademicYear] = useState("");
+  const academicYearOptions = ["2025-26", "2026-27", "2027-28", "2028-29"];
+
+  // Filter courses based on selected academic year
+  const filteredCourses = academicYear
+    ? courses.filter((course) => {
+        // Extract the start year from academic year (e.g., "2026-27" -> 2026)
+        const selectedStartYear = parseInt(academicYear.split("-")[0]);
+        
+        // Show courses with no year of close
+        if (!course.yearEnd) {
+          return true;
+        }
+        
+        // Show courses where year of close is within the last 3 years (including selected year)
+        const yearEnd = parseInt(course.yearEnd);
+        const minYear = selectedStartYear - 2; // e.g., for 2026: show 2024, 2025, 2026
+        return yearEnd >= minYear && yearEnd <= selectedStartYear;
+      })
+    : courses;
+
   // Fetch disciplines from API
   const fetchDisciplines = async () => {
     try {
@@ -209,32 +231,56 @@ const AllPrograms = () => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="pt-16 lg:pt-14 p-4">
-          {/* Add Course Link/Close - Only for admin */}
-          {isAdmin() && (
-            <div className="w-full">
-              <div className="flex justify-end py-2 mb-4">
-                {!showForm ? (
-                  <button
-                    type="button"
-                    onClick={handleAddNewCourse}
-                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                  >
-                    Add Course
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleCloseForm}
-                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                  >
-                    Close
-                  </button>
-                )}
+          {/* Academic Year Filter and Add Course Link */}
+          <div className="w-full">
+            <div className="flex justify-between items-center py-2 mb-4">
+              {/* Academic Year Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Academic Year:
+                </label>
+                <select
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                >
+                  <option value="">--Select Year--</option>
+                  {academicYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Add/Edit Course Form */}
-              {showForm && (
-                <form onSubmit={handleAddCourseSubmit}>
+              {/* Add Course Link - Only for admin */}
+              {isAdmin() && (
+                <div>
+                  {!showForm ? (
+                    <button
+                      type="button"
+                      onClick={handleAddNewCourse}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Add Course
+                    </button>
+                    ) : (
+                    <button
+                      type="button"
+                      onClick={handleCloseForm}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add/Edit Course Form - Only for admin */}
+          {isAdmin() && showForm && (
+            <form onSubmit={handleAddCourseSubmit}>
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">
                     {isEditMode ? "Edit Course" : "Add Course"}
                   </h3>
@@ -367,9 +413,7 @@ const AllPrograms = () => {
                       : (isEditMode ? "Update Course" : "Add Course")}
                   </button>
                 </div>
-              </form>
-              )}
-            </div>
+            </form>
           )}
 
           {/* Courses Table */}
@@ -378,7 +422,7 @@ const AllPrograms = () => {
               <div className="flex justify-center items-center py-8">
                 <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
               </div>
-            ) : courses.length === 0 ? (
+            ) : filteredCourses.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 No courses found.
               </div>
@@ -400,7 +444,7 @@ const AllPrograms = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {courses.map((course, index) => (
+                    {filteredCourses.map((course, index) => (
                       <tr
                         key={course.id}
                         className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
