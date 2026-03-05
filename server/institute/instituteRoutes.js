@@ -5,6 +5,10 @@ const {
   getProgramDetails,
   getInstituteProfile,
   saveInstituteProfile,
+  getDisciplines,
+  getProgramLevels,
+  addProgramName,
+  addCourse,
 } = require("./instituteController");
 const {
   authenticateToken,
@@ -49,6 +53,38 @@ router.post(
   authenticateToken,
   authorizeRoles("admin"),
   saveInstituteProfile
+);
+
+// Get all disciplines - accessible by authenticated users
+router.get(
+  "/disciplines",
+  authenticateToken,
+  authorizeRoles("admin", "user"),
+  getDisciplines
+);
+
+// Get all program levels - accessible by authenticated users
+router.get(
+  "/program-levels",
+  authenticateToken,
+  authorizeRoles("admin", "user"),
+  getProgramLevels
+);
+
+// Add a new program name - only accessible by admin
+router.post(
+  "/program-name",
+  authenticateToken,
+  authorizeRoles("admin"),
+  addProgramName
+);
+
+// Add a new course to all_program table - only accessible by admin
+router.post(
+  "/course",
+  authenticateToken,
+  authorizeRoles("admin"),
+  addCourse
 );
 
 module.exports = router;

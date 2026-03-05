@@ -326,9 +326,178 @@ const saveInstituteProfile = async (req, res) => {
   }
 };
 
+/**
+ * Get Disciplines
+ * Returns all disciplines from the discipline table
+ */
+const getDisciplines = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT id, discipline FROM discipline ORDER BY discipline ASC"
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching disciplines:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch disciplines",
+    });
+  }
+};
+
+/**
+ * Get Program Levels
+ * Returns all program levels from the program_level table
+ */
+const getProgramLevels = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT id, level FROM program_level ORDER BY level ASC"
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching program levels:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch program levels",
+    });
+  }
+};
+
+/**
+ * Add Program Name
+ * Adds a new program name to the program_name table
+ */
+const addProgramName = async (req, res) => {
+  try {
+    const { coursename } = req.body;
+
+    if (!coursename || coursename.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Course name is required",
+      });
+    }
+
+    const [result] = await pool.execute(
+      "INSERT INTO program_name (coursename) VALUES (?)",
+      [coursename.trim()]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Program name added successfully",
+      data: {
+        id: result.insertId,
+        coursename: coursename.trim(),
+      },
+    });
+  } catch (error) {
+    console.error("Error adding program name:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to add program name",
+    });
+  }
+};
+
+/**
+ * Add Course
+ * Adds a new course to all_program table
+ * First inserts program name into program_name table, then uses that ID as foreign key
+ */
+const addCourse = async (req, res) => {
+  try {
+    const { disciplineId, levelId, programName, departmentName, yearOfStart } = req.body;
+
+    // Validate required fields
+    if (!disciplineId) {
+      return res.status(400).json({
+        success: false,
+        error: "Discipline is required",
+      });
+    }
+    if (!levelId) {
+      return res.status(400).json({
+        success: false,
+        error: "Level of program is required",
+      });
+    }
+    if (!programName || programName.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Program name is required",
+      });
+    }
+    if (!departmentName || departmentName.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Department name is required",
+      });
+    }
+    if (!yearOfStart) {
+      return res.status(400).json({
+        success: false,
+        error: "Year of start is required",
+      });
+    }
+
+    // Step 1: Insert program name into program_name table
+    const [programResult] = await pool.execute(
+      "INSERT INTO program_name (coursename) VALUES (?)",
+      [programName.trim()]
+    );
+    const programNameId = programResult.insertId;
+
+    // Step 2: Insert into all_program table with foreign keys
+    const [courseResult] = await pool.execute(
+      `INSERT INTO all_program (discipline, level, programname, department_name, year_start) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        parseInt(disciplineId),
+        parseInt(levelId),
+        programNameId,
+        departmentName.trim(),
+        parseInt(yearOfStart),
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Course added successfully",
+      data: {
+        id: courseResult.insertId,
+        programNameId: programNameId,
+        disciplineId: parseInt(disciplineId),
+        levelId: parseInt(levelId),
+        departmentName: departmentName.trim(),
+        yearOfStart: parseInt(yearOfStart),
+      },
+    });
+  } catch (error) {
+    console.error("Error adding course:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to add course",
+    });
+  }
+};
+
 module.exports = {
   getProgramNames,
   getProgramDetails,
   getInstituteProfile,
   saveInstituteProfile,
+  getDisciplines,
+  getProgramLevels,
+  addProgramName,
+  addCourse,
 };
