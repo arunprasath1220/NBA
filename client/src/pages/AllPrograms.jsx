@@ -8,6 +8,8 @@ const AllPrograms = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
   const [showForm, setShowForm] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState(null);
   const [formData, setFormData] = useState({
     discipline: "",
     levelOfProgram: "",
@@ -110,51 +112,95 @@ const AllPrograms = () => {
     setIsSubmitting(true);
     
     try {
-      // Post the course to the API
-      const response = await fetch("http://localhost:5000/api/institute/course", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          disciplineId: formData.discipline,
-          levelId: formData.levelOfProgram,
-          programName: formData.nameOfProgram,
-          departmentName: formData.nameOfDepartment,
-          yearOfStart: formData.yearOfStart,
-        }),
-      });
+      let response;
+      
+      if (isEditMode) {
+        // Update existing course
+        response = await fetch(`http://localhost:5000/api/institute/course/${editingCourseId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            disciplineId: formData.discipline,
+            levelId: formData.levelOfProgram,
+            programName: formData.nameOfProgram,
+            departmentName: formData.nameOfDepartment,
+            yearOfStart: formData.yearOfStart,
+            yearOfEnd: formData.yearOfEnd || null,
+          }),
+        });
+      } else {
+        // Add new course
+        response = await fetch("http://localhost:5000/api/institute/course", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            disciplineId: formData.discipline,
+            levelId: formData.levelOfProgram,
+            programName: formData.nameOfProgram,
+            departmentName: formData.nameOfDepartment,
+            yearOfStart: formData.yearOfStart,
+          }),
+        });
+      }
 
       const data = await response.json();
 
       if (data.success) {
-        alert("Course added successfully!");
-        setFormData({
-          discipline: "",
-          levelOfProgram: "",
-          nameOfProgram: "",
-          nameOfDepartment: "",
-          yearOfStart: "",
-          yearOfEnd: "",
-        });
-        setShowForm(false);
+        alert(isEditMode ? "Course updated successfully!" : "Course added successfully!");
+        resetForm();
         fetchCourses(); // Refresh the courses table
       } else {
-        alert(data.error || "Failed to add course");
+        alert(data.error || (isEditMode ? "Failed to update course" : "Failed to add course"));
       }
     } catch (error) {
-      console.error("Error adding course:", error);
-      alert("Failed to add course. Please try again.");
+      console.error(isEditMode ? "Error updating course:" : "Error adding course:", error);
+      alert(isEditMode ? "Failed to update course. Please try again." : "Failed to add course. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      discipline: "",
+      levelOfProgram: "",
+      nameOfProgram: "",
+      nameOfDepartment: "",
+      yearOfStart: "",
+      yearOfEnd: "",
+    });
+    setShowForm(false);
+    setIsEditMode(false);
+    setEditingCourseId(null);
+  };
+
   const handleEditCourse = (course) => {
-    // TODO: Implement edit functionality
-    console.log("Edit course:", course);
-    alert(`Edit functionality for course ID: ${course.id} - Coming soon!`);
+    setFormData({
+      discipline: course.disciplineId?.toString() || "",
+      levelOfProgram: course.levelId?.toString() || "",
+      nameOfProgram: course.programName || "",
+      nameOfDepartment: course.departmentName || "",
+      yearOfStart: course.yearStart?.toString() || "",
+      yearOfEnd: course.yearEnd?.toString() || "",
+    });
+    setEditingCourseId(course.id);
+    setIsEditMode(true);
+    setShowForm(true);
+  };
+
+  const handleAddNewCourse = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    resetForm();
   };
 
   return (
@@ -170,7 +216,7 @@ const AllPrograms = () => {
                 {!showForm ? (
                   <button
                     type="button"
-                    onClick={() => setShowForm(true)}
+                    onClick={handleAddNewCourse}
                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
                   >
                     Add Course
@@ -178,7 +224,7 @@ const AllPrograms = () => {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setShowForm(false)}
+                    onClick={handleCloseForm}
                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
                   >
                     Close
@@ -186,9 +232,12 @@ const AllPrograms = () => {
                 )}
               </div>
 
-              {/* Add Course Form */}
+              {/* Add/Edit Course Form */}
               {showForm && (
                 <form onSubmit={handleAddCourseSubmit}>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    {isEditMode ? "Edit Course" : "Add Course"}
+                  </h3>
                   {/* Row 1: Discipline, Level of Program, Name of Program */}
                   <div className="flex flex-col md:flex-row gap-4 mb-4">
                     {/* Discipline Dropdown */}
@@ -205,7 +254,7 @@ const AllPrograms = () => {
                       >
                         <option value="">--Select Discipline--</option>
                         {disciplineOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
+                          <option key={option.id} value={String(option.id)}>
                             {option.discipline}
                           </option>
                         ))}
@@ -226,7 +275,7 @@ const AllPrograms = () => {
                       >
                         <option value="">--Select Level--</option>
                         {levelOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
+                          <option key={option.id} value={String(option.id)}>
                             {option.level}
                           </option>
                         ))}
@@ -250,7 +299,7 @@ const AllPrograms = () => {
                     </div>
                   </div>
 
-                  {/* Row 2: Year of Start, Name of Department */}
+                  {/* Row 2: Year of Start, Year of End (edit only), Name of Department */}
                   <div className="flex flex-col md:flex-row gap-4">
                     {/* Year of Start */}
                     <div className="flex-1">
@@ -270,8 +319,27 @@ const AllPrograms = () => {
                       />
                     </div>
 
+                    {/* Year of End - Only visible in edit mode */}
+                    {isEditMode && (
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Year of End (YYYY) <span className="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="yearOfEnd"
+                          value={formData.yearOfEnd}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          placeholder="e.g., 2028"
+                          pattern="\d{4}"
+                          maxLength="4"
+                        />
+                      </div>
+                    )}
+
                     {/* Name of Department Input */}
-                    <div className="flex-[2]">
+                    <div className={isEditMode ? "flex-1" : "flex-[2]"}>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Name of the Department
                       </label>
@@ -294,7 +362,9 @@ const AllPrograms = () => {
                     disabled={isSubmitting}
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? "Adding..." : "Add Course"}
+                    {isSubmitting 
+                      ? (isEditMode ? "Updating..." : "Adding...") 
+                      : (isEditMode ? "Update Course" : "Add Course")}
                   </button>
                 </div>
               </form>

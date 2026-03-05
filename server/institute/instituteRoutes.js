@@ -10,6 +10,7 @@ const {
   addProgramName,
   addCourse,
   getAllCourses,
+  updateCourse,
 } = require("./instituteController");
 const {
   authenticateToken,
@@ -94,6 +95,14 @@ router.get(
   authenticateToken,
   authorizeRoles("admin", "user"),
   getAllCourses
+);
+
+// Update a course in all_program table - only accessible by admin
+router.put(
+  "/course/:id",
+  authenticateToken,
+  authorizeRoles("admin"),
+  updateCourse
 );
 
 module.exports = router;

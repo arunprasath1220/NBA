@@ -500,6 +500,9 @@ const getAllCourses = async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT 
         ap.id,
+        ap.discipline as disciplineId,
+        ap.level as levelId,
+        ap.programname as programNameId,
         d.discipline as discipline,
         pl.level as level,
         pn.coursename as programName,
@@ -526,6 +529,96 @@ const getAllCourses = async (req, res) => {
   }
 };
 
+/**
+ * Update Course
+ * Updates an existing course in all_program table
+ */
+const updateCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { disciplineId, levelId, programName, departmentName, yearOfStart, yearOfEnd } = req.body;
+
+    // Validate required fields
+    if (!disciplineId) {
+      return res.status(400).json({
+        success: false,
+        error: "Discipline is required",
+      });
+    }
+    if (!levelId) {
+      return res.status(400).json({
+        success: false,
+        error: "Level of program is required",
+      });
+    }
+    if (!programName || programName.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Program name is required",
+      });
+    }
+    if (!departmentName || departmentName.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Department name is required",
+      });
+    }
+    if (!yearOfStart) {
+      return res.status(400).json({
+        success: false,
+        error: "Year of start is required",
+      });
+    }
+
+    // Get the existing course to find the programname ID
+    const [existingCourse] = await pool.execute(
+      "SELECT programname FROM all_program WHERE id = ?",
+      [id]
+    );
+
+    if (existingCourse.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Course not found",
+      });
+    }
+
+    const programNameId = existingCourse[0].programname;
+
+    // Update the program name in program_name table
+    await pool.execute(
+      "UPDATE program_name SET coursename = ? WHERE id = ?",
+      [programName.trim(), programNameId]
+    );
+
+    // Update the all_program table
+    await pool.execute(
+      `UPDATE all_program 
+       SET discipline = ?, level = ?, department_name = ?, year_start = ?, year_end = ?
+       WHERE id = ?`,
+      [
+        parseInt(disciplineId),
+        parseInt(levelId),
+        departmentName.trim(),
+        parseInt(yearOfStart),
+        yearOfEnd ? parseInt(yearOfEnd) : null,
+        id,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Course updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating course:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update course",
+    });
+  }
+};
+
 module.exports = {
   getProgramNames,
   getProgramDetails,
@@ -536,4 +629,5 @@ module.exports = {
   addProgramName,
   addCourse,
   getAllCourses,
+  updateCourse,
 };
