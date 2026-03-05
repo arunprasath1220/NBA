@@ -9,6 +9,7 @@ const {
   getProgramLevels,
   addProgramName,
   addCourse,
+  getAllCourses,
 } = require("./instituteController");
 const {
   authenticateToken,
@@ -85,6 +86,14 @@ router.post(
   authenticateToken,
   authorizeRoles("admin"),
   addCourse
+);
+
+// Get all courses from all_program table - accessible by authenticated users
+router.get(
+  "/courses",
+  authenticateToken,
+  authorizeRoles("admin", "user"),
+  getAllCourses
 );
 
 module.exports = router;

@@ -22,6 +22,10 @@ const AllPrograms = () => {
   const [levelOptions, setLevelOptions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // State for courses table
+  const [courses, setCourses] = useState([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
+
   // Fetch disciplines from API
   const fetchDisciplines = async () => {
     try {
@@ -52,17 +56,36 @@ const AllPrograms = () => {
     }
   };
 
+  // Fetch all courses from API
+  const fetchCourses = async () => {
+    setIsLoadingCourses(true);
+    try {
+      const response = await fetch("http://localhost:5000/api/institute/courses", {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCourses(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching courses:", error);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate("/login");
     }
   }, [isAuthenticated, isLoading, navigate]);
 
-  // Fetch dropdown data when authenticated
+  // Fetch dropdown data and courses when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchDisciplines();
       fetchProgramLevels();
+      fetchCourses();
     }
   }, [isAuthenticated]);
 
@@ -115,6 +138,8 @@ const AllPrograms = () => {
           yearOfStart: "",
           yearOfEnd: "",
         });
+        setShowForm(false);
+        fetchCourses(); // Refresh the courses table
       } else {
         alert(data.error || "Failed to add course");
       }
@@ -124,6 +149,12 @@ const AllPrograms = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEditCourse = (course) => {
+    // TODO: Implement edit functionality
+    console.log("Edit course:", course);
+    alert(`Edit functionality for course ID: ${course.id} - Coming soon!`);
   };
 
   return (
@@ -270,6 +301,65 @@ const AllPrograms = () => {
               )}
             </div>
           )}
+
+          {/* Courses Table */}
+          <div className="mt-6">
+            {isLoadingCourses ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
+              </div>
+            ) : courses.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No courses found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-blue-600 text-white">
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Sr.No.</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Discipline</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Level of Program</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Name of the Program</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Year of Start</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Year of Close</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Name of The Department</th>
+                      {isAdmin() && (
+                        <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Edit</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courses.map((course, index) => (
+                      <tr
+                        key={course.id}
+                        className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
+                      >
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{index + 1}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{course.discipline || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{course.level || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{course.programName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{course.yearStart || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{course.yearEnd || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{course.departmentName || "-"}</td>
+                        {isAdmin() && (
+                          <td className="border border-gray-300 px-4 py-2 text-sm">
+                            <button
+                              type="button"
+                              onClick={() => handleEditCourse(course)}
+                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

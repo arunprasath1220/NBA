@@ -491,6 +491,41 @@ const addCourse = async (req, res) => {
   }
 };
 
+/**
+ * Get All Courses
+ * Returns all courses from all_program table with joined data
+ */
+const getAllCourses = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT 
+        ap.id,
+        d.discipline as discipline,
+        pl.level as level,
+        pn.coursename as programName,
+        ap.department_name as departmentName,
+        ap.year_start as yearStart,
+        ap.year_end as yearEnd
+      FROM all_program ap
+      LEFT JOIN discipline d ON ap.discipline = d.id
+      LEFT JOIN program_level pl ON ap.level = pl.id
+      LEFT JOIN program_name pn ON ap.programname = pn.id
+      ORDER BY ap.id ASC`
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching courses:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch courses",
+    });
+  }
+};
+
 module.exports = {
   getProgramNames,
   getProgramDetails,
@@ -500,4 +535,5 @@ module.exports = {
   getProgramLevels,
   addProgramName,
   addCourse,
+  getAllCourses,
 };
