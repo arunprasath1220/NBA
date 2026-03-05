@@ -139,7 +139,6 @@ const getInstituteProfile = async (req, res) => {
 const saveInstituteProfile = async (req, res) => {
   try {
     const {
-      programAppliedFor,
       tire,
       instituteName,
       yearOfEstablishment,
@@ -195,7 +194,6 @@ const saveInstituteProfile = async (req, res) => {
       // Update existing profile
       const [result] = await pool.execute(
         `UPDATE institute_program_details SET
-          program_applied_for = ?,
           tier = ?,
           institute_name = ?,
           year_of_establishment = ?,
@@ -221,7 +219,6 @@ const saveInstituteProfile = async (req, res) => {
           university_pin_code = ?
         WHERE id = ?`,
         [
-          toStringOrNull(programAppliedFor),
           toStringOrNull(tire),
           instituteName,
           toIntOrNull(yearOfEstablishment),
@@ -258,7 +255,6 @@ const saveInstituteProfile = async (req, res) => {
       // Create new profile
       const [result] = await pool.execute(
         `INSERT INTO institute_program_details (
-          program_applied_for,
           tier,
           institute_name,
           year_of_establishment,
@@ -282,9 +278,8 @@ const saveInstituteProfile = async (req, res) => {
           university_city,
           university_state,
           university_pin_code
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          toStringOrNull(programAppliedFor),
           toStringOrNull(tire),
           instituteName,
           toIntOrNull(yearOfEstablishment),
