@@ -277,9 +277,20 @@ const AlliedCourseMapping = () => {
     }
   }, [formData.alliedProgramName]);
 
-  // Reset allied fields when hasAlliedDepartment changes to "No"
+  // Handle hasAlliedDepartment changes
   useEffect(() => {
-    if (formData.hasAlliedDepartment === "No" && !isRestoringDraft.current) {
+    if (isRestoringDraft.current) return;
+    
+    if (formData.hasAlliedDepartment === "Yes") {
+      // Auto-fill allied program level with the main program level
+      if (formData.programLevel) {
+        setFormData((prev) => ({
+          ...prev,
+          alliedProgramLevel: formData.programLevel,
+        }));
+      }
+    } else if (formData.hasAlliedDepartment === "No") {
+      // Reset allied fields when "No" is selected
       setFormData((prev) => ({
         ...prev,
         alliedProgramLevel: "",
@@ -578,11 +589,13 @@ const AlliedCourseMapping = () => {
                         disabled={!formData.alliedProgramLevel}
                       >
                         <option value="">--Select Program--</option>
-                        {alliedPrograms.map((program) => (
-                          <option key={program.id} value={program.id}>
-                            {program.programName}
-                          </option>
-                        ))}
+                        {alliedPrograms
+                          .filter((program) => program.id.toString() !== formData.programName)
+                          .map((program) => (
+                            <option key={program.id} value={program.id}>
+                              {program.programName}
+                            </option>
+                          ))}
                       </select>
                     </div>
 
