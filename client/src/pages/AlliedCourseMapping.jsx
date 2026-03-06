@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const API_URL = "http://localhost:5000/api/allied-course";
 const DRAFT_STORAGE_KEY = "alliedCourseMappingDraft";
@@ -399,6 +402,111 @@ const AlliedCourseMapping = () => {
     }
   };
 
+  // Prepare flat data for export
+  const prepareExportData = () => {
+    const exportData = [];
+    alliedMappings.forEach((group, index) => {
+      const hasAllied = group.alliedPrograms && group.alliedPrograms.length > 0;
+      if (hasAllied) {
+        group.alliedPrograms.forEach((allied, alliedIndex) => {
+          exportData.push({
+            "Sr.No.": alliedIndex === 0 ? index + 1 : "",
+            "Program Level": alliedIndex === 0 ? group.mainProgram?.programLevel || "-" : "",
+            "Program Name": alliedIndex === 0 ? group.mainProgram?.programName || "-" : "",
+            "Department Name": alliedIndex === 0 ? group.mainProgram?.departmentName || "-" : "",
+            "Allied Program Level": allied.programLevel || "-",
+            "Allied Program Name": allied.programName || "-",
+            "Allied Department": allied.departmentName || "-",
+          });
+        });
+      } else {
+        exportData.push({
+          "Sr.No.": index + 1,
+          "Program Level": group.mainProgram?.programLevel || "-",
+          "Program Name": group.mainProgram?.programName || "-",
+          "Department Name": group.mainProgram?.departmentName || "-",
+          "Allied Program Level": "-",
+          "Allied Program Name": "-",
+          "Allied Department": "-",
+        });
+      }
+    });
+    return exportData;
+  };
+
+  // Export to Excel
+  const exportToExcel = () => {
+    const exportData = prepareExportData();
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Allied Course Mapping");
+    
+    // Set column widths
+    worksheet["!cols"] = [
+      { wch: 8 },  // Sr.No.
+      { wch: 15 }, // Program Level
+      { wch: 25 }, // Program Name
+      { wch: 25 }, // Department Name
+      { wch: 20 }, // Allied Program Level
+      { wch: 25 }, // Allied Program Name
+      { wch: 25 }, // Allied Department
+    ];
+    
+    XLSX.writeFile(workbook, "Allied_Course_Mapping.xlsx");
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    const doc = new jsPDF("landscape");
+    
+    doc.setFontSize(16);
+    doc.text("Allied Course Mapping", 14, 15);
+    
+    const tableHeaders = ["Sr.No.", "Program Level", "Program Name", "Department Name", "Allied Program Level", "Allied Program Name", "Allied Department"];
+    
+    const tableData = [];
+    
+    alliedMappings.forEach((group, index) => {
+      const hasAllied = group.alliedPrograms && group.alliedPrograms.length > 0;
+      
+      if (hasAllied) {
+        group.alliedPrograms.forEach((allied) => {
+          tableData.push([
+            String(index + 1),
+            group.mainProgram?.programLevel || "-",
+            group.mainProgram?.programName || "-",
+            group.mainProgram?.departmentName || "-",
+            allied.programLevel || "-",
+            allied.programName || "-",
+            allied.departmentName || "-",
+          ]);
+        });
+      } else {
+        tableData.push([
+          String(index + 1),
+          group.mainProgram?.programLevel || "-",
+          group.mainProgram?.programName || "-",
+          group.mainProgram?.departmentName || "-",
+          "-",
+          "-",
+          "-",
+        ]);
+      }
+    });
+    
+    autoTable(doc, {
+      head: [tableHeaders],
+      body: tableData,
+      startY: 25,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [239, 246, 255] },
+      theme: "grid",
+    });
+    
+    doc.save("Allied_Course_Mapping.pdf");
+  };
+
   const handleCloseForm = () => {
     resetForm(true); // Clear draft when user explicitly closes the form
   };
@@ -456,9 +564,34 @@ const AlliedCourseMapping = () => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="pt-16 lg:pt-14 p-4">
-          {/* Header with Add Mapping Link */}
+          {/* Header with Add Mapping Link and Export Buttons */}
           <div className="w-full">
-            <div className="flex justify-end items-center py-2 mb-4">
+            <div className="flex justify-end items-center gap-4 py-2 mb-4">
+              {/* Export Buttons - Available to all users */}
+              {alliedMappings.length > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={exportToExcel}
+                    className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium text-sm flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Excel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportToPDF}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-medium text-sm flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    PDF
+                  </button>
+                </div>
+              )}
               {/* Add Mapping Link - Only for admin */}
               {isAdmin() && (
                 <div>
