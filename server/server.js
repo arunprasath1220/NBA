@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const authRoutes = require("./auth/authRoutes");
 const instituteRoutes = require("./institute/instituteRoutes");
+const alliedCourseRoutes = require("./alliedCourse/alliedCourseRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,6 +23,7 @@ app.use(cookieParser());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/institute", instituteRoutes);
+app.use("/api/allied-course", alliedCourseRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {

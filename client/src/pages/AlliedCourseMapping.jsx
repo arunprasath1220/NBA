@@ -1,18 +1,294 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 
+const API_URL = "http://localhost:5000/api/allied-course";
+const DRAFT_STORAGE_KEY = "alliedCourseMappingDraft";
+
 const AlliedCourseMapping = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
+  
+  // Load draft from localStorage on initial render
+  const loadDraft = () => {
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (savedDraft) {
+        return JSON.parse(savedDraft);
+      }
+    } catch (error) {
+      console.error("Error loading draft:", error);
+    }
+    return null;
+  };
+
+  const initialDraft = loadDraft();
+  const isRestoringDraft = useRef(!!initialDraft);
+  
+  const [showForm, setShowForm] = useState(initialDraft?.showForm || false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingMappings, setIsLoadingMappings] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(initialDraft?.isEditMode || false);
+  const [editingId, setEditingId] = useState(initialDraft?.editingId || null);
+
+  // Form state for allied course mapping
+  const [formData, setFormData] = useState(initialDraft?.formData || {
+    programLevel: "",
+    programName: "",
+    hasAlliedDepartment: "",
+    departmentName: "",
+    // Allied department fields (shown when hasAlliedDepartment === "Yes")
+    alliedProgramLevel: "",
+    alliedDepartmentName: "",
+    alliedProgramName: "",
+  });
+
+  // Dropdown options from API
+  const [programLevels, setProgramLevels] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const alliedOptions = ["Yes", "No"];
+
+  // Allied dropdown options
+  const [alliedPrograms, setAlliedPrograms] = useState([]);
+
+  // Allied mappings data from API
+  const [alliedMappings, setAlliedMappings] = useState([]);
+
+  // Save draft to localStorage whenever form state changes
+  const saveDraft = () => {
+    try {
+      const draft = {
+        formData,
+        showForm,
+        isEditMode,
+        editingId,
+      };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (error) {
+      console.error("Error saving draft:", error);
+    }
+  };
+
+  // Clear draft from localStorage
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (error) {
+      console.error("Error clearing draft:", error);
+    }
+  };
+
+  // Save draft whenever form data or form state changes
+  useEffect(() => {
+    saveDraft();
+  }, [formData, showForm, isEditMode, editingId]);
+
+  // Restore dropdown data if draft has selections
+  useEffect(() => {
+    const restoreDropdownData = async () => {
+      if (initialDraft?.formData?.programLevel) {
+        await fetchProgramsByLevel(initialDraft.formData.programLevel);
+      }
+      if (initialDraft?.formData?.alliedProgramLevel) {
+        await fetchAlliedProgramsByLevel(initialDraft.formData.alliedProgramLevel);
+      }
+      // Mark restoration as complete after dropdowns are loaded
+      setTimeout(() => {
+        isRestoringDraft.current = false;
+      }, 100);
+    };
+    if (isAuthenticated && initialDraft) {
+      restoreDropdownData();
+    } else {
+      isRestoringDraft.current = false;
+    }
+  }, [isAuthenticated]);
+
+  // Fetch program levels from API
+  const fetchProgramLevels = async () => {
+    try {
+      const response = await fetch(`${API_URL}/program-levels`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setProgramLevels(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching program levels:", error);
+    }
+  };
+
+  // Fetch programs by level from API
+  const fetchProgramsByLevel = async (levelId) => {
+    try {
+      const response = await fetch(`${API_URL}/programs/${levelId}`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPrograms(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching programs:", error);
+    }
+  };
+
+  // Fetch department for a program
+  const fetchProgramDepartment = async (programId) => {
+    try {
+      const response = await fetch(`${API_URL}/program/${programId}/department`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setFormData((prev) => ({
+          ...prev,
+          departmentName: data.data.departmentName || "",
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching program department:", error);
+    }
+  };
+
+  // Fetch programs by level for allied section
+  const fetchAlliedProgramsByLevel = async (levelId) => {
+    try {
+      const response = await fetch(`${API_URL}/programs/${levelId}`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAlliedPrograms(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching allied programs:", error);
+    }
+  };
+
+  // Fetch department for allied program (auto-fill)
+  const fetchAlliedProgramDepartment = async (programId) => {
+    try {
+      const response = await fetch(`${API_URL}/program/${programId}/department`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setFormData((prev) => ({
+          ...prev,
+          alliedDepartmentName: data.data.departmentName || "",
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching allied program department:", error);
+    }
+  };
+
+  // Fetch all allied mappings
+  const fetchAlliedMappings = async () => {
+    setIsLoadingMappings(true);
+    try {
+      const response = await fetch(`${API_URL}/mappings`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAlliedMappings(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching allied mappings:", error);
+    } finally {
+      setIsLoadingMappings(false);
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate("/login");
     }
   }, [isAuthenticated, isLoading, navigate]);
+
+  // Fetch data when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProgramLevels();
+      fetchAlliedMappings();
+    }
+  }, [isAuthenticated]);
+
+  // Fetch programs when level changes
+  useEffect(() => {
+    if (formData.programLevel) {
+      fetchProgramsByLevel(formData.programLevel);
+      // Reset program name and department when level changes (skip during draft restoration)
+      if (!isRestoringDraft.current) {
+        setFormData((prev) => ({
+          ...prev,
+          programName: "",
+          departmentName: "",
+        }));
+      }
+    } else {
+      setPrograms([]);
+    }
+  }, [formData.programLevel]);
+
+  // Fetch department when program changes
+  useEffect(() => {
+    if (formData.programName) {
+      fetchProgramDepartment(formData.programName);
+    } else if (!isRestoringDraft.current) {
+      setFormData((prev) => ({
+        ...prev,
+        departmentName: "",
+      }));
+    }
+  }, [formData.programName]);
+
+  // Fetch allied programs when allied level changes
+  useEffect(() => {
+    if (formData.alliedProgramLevel) {
+      fetchAlliedProgramsByLevel(formData.alliedProgramLevel);
+      // Reset allied program and department when level changes (skip during draft restoration)
+      if (!isRestoringDraft.current) {
+        setFormData((prev) => ({
+          ...prev,
+          alliedProgramName: "",
+          alliedDepartmentName: "",
+        }));
+      }
+    } else {
+      setAlliedPrograms([]);
+    }
+  }, [formData.alliedProgramLevel]);
+
+  // Fetch allied department when allied program changes
+  useEffect(() => {
+    if (formData.alliedProgramName) {
+      fetchAlliedProgramDepartment(formData.alliedProgramName);
+    } else if (!isRestoringDraft.current) {
+      setFormData((prev) => ({
+        ...prev,
+        alliedDepartmentName: "",
+      }));
+    }
+  }, [formData.alliedProgramName]);
+
+  // Reset allied fields when hasAlliedDepartment changes to "No"
+  useEffect(() => {
+    if (formData.hasAlliedDepartment === "No" && !isRestoringDraft.current) {
+      setFormData((prev) => ({
+        ...prev,
+        alliedProgramLevel: "",
+        alliedDepartmentName: "",
+        alliedProgramName: "",
+      }));
+      setAlliedPrograms([]);
+    }
+  }, [formData.hasAlliedDepartment]);
 
   if (isLoading) {
     return (
@@ -22,32 +298,387 @@ const AlliedCourseMapping = () => {
     );
   }
 
-  const handleEdit = () => {
-    alert("Edit functionality will be implemented here");
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const url = isEditMode 
+        ? `${API_URL}/mapping/${editingId}`
+        : `${API_URL}/mapping`;
+      
+      const response = await fetch(url, {
+        method: isEditMode ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          levelId: formData.programLevel,
+          programId: formData.programName,
+          hasAlliedDepartment: formData.hasAlliedDepartment,
+          alliedLevelId: formData.alliedProgramLevel || null,
+          alliedDepartmentName: formData.alliedDepartmentName || null,
+          alliedProgramId: formData.alliedProgramName || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(isEditMode ? "Allied mapping updated successfully!" : "Allied mapping added successfully!");
+        clearDraft();
+        resetForm();
+        fetchAlliedMappings();
+      } else {
+        alert(data.error || "Failed to save allied mapping");
+      }
+    } catch (error) {
+      console.error("Error saving mapping:", error);
+      alert("Failed to save mapping. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = (clearStorage = false) => {
+    setFormData({
+      programLevel: "",
+      programName: "",
+      hasAlliedDepartment: "",
+      departmentName: "",
+      alliedProgramLevel: "",
+      alliedDepartmentName: "",
+      alliedProgramName: "",
+    });
+    setPrograms([]);
+    setAlliedPrograms([]);
+    setShowForm(false);
+    setIsEditMode(false);
+    setEditingId(null);
+    if (clearStorage) {
+      clearDraft();
+    }
+  };
+
+  const handleCloseForm = () => {
+    resetForm(true); // Clear draft when user explicitly closes the form
+  };
+
+  const handleAddNewMapping = () => {
+    resetForm(true); // Clear any existing draft when starting new mapping
+    setShowForm(true);
+  };
+
+  const handleEditMapping = async (mapping) => {
+    // Populate form with mapping data
+    setFormData({
+      programLevel: mapping.levelId?.toString() || "",
+      programName: "",
+      hasAlliedDepartment: mapping.hasAlliedDepartment || "",
+      departmentName: mapping.departmentName || "",
+      alliedProgramLevel: mapping.alliedLevelId?.toString() || "",
+      alliedDepartmentName: mapping.alliedDepartmentName || "",
+      alliedProgramName: "",
+    });
+    
+    // Fetch programs for the level first
+    if (mapping.levelId) {
+      await fetchProgramsByLevel(mapping.levelId);
+    }
+    
+    // If has allied department, fetch allied programs
+    if (mapping.hasAlliedDepartment === "Yes" && mapping.alliedLevelId) {
+      await fetchAlliedProgramsByLevel(mapping.alliedLevelId);
+    }
+    
+    // Set program names after data is loaded
+    setFormData((prev) => ({
+      ...prev,
+      programName: mapping.programId?.toString() || "",
+      alliedProgramName: mapping.alliedProgramId?.toString() || "",
+    }));
+    
+    setEditingId(mapping.id);
+    setIsEditMode(true);
+    setShowForm(true);
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-white">
       <Navbar />
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
-        <div className="p-6 pt-16 lg:pt-14">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-900">Allied Mapping</h1>
+        <div className="pt-16 lg:pt-14 p-4">
+          {/* Header with Add Mapping Link */}
+          <div className="w-full">
+            <div className="flex justify-end items-center py-2 mb-4">
+              {/* Add Mapping Link - Only for admin */}
               {isAdmin() && (
-                <button
-                  onClick={handleEdit}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  ✏️ Edit
-                </button>
+                <div>
+                  {!showForm ? (
+                    <button
+                      type="button"
+                      onClick={handleAddNewMapping}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Map Allied Course
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleCloseForm}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
               )}
             </div>
+          </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-gray-600">Allied Course Mapping will be displayed here.</p>
-            </div>
+          {/* Admin Only: Allied Course Mapping Form */}
+          {isAdmin() && showForm && (
+            <form onSubmit={handleSubmit}>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                {isEditMode ? "Edit Allied Course Mapping" : "Map Course as Allied"}
+              </h3>
+              {/* Row 1: Program Level, Program Name, Department Name */}
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
+                {/* Program Level */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Program Level
+                  </label>
+                  <select
+                    name="programLevel"
+                    value={formData.programLevel}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    required
+                  >
+                    <option value="">--Select Level--</option>
+                    {programLevels.map((level) => (
+                      <option key={level.id} value={level.id}>
+                        {level.level}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Program Name */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Program Name
+                  </label>
+                  <select
+                    name="programName"
+                    value={formData.programName}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    required
+                    disabled={!formData.programLevel}
+                  >
+                    <option value="">--Select Program--</option>
+                    {programs.map((program) => (
+                      <option key={program.id} value={program.id}>
+                        {program.programName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Department Name (Auto-filled) */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Department Name
+                  </label>
+                  <input
+                    type="text"
+                    name="departmentName"
+                    value={formData.departmentName}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 outline-none cursor-not-allowed"
+                    placeholder="Auto-filled based on program"
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Having Allied Department/Cluster */}
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
+                {/* Having Allied Department/Cluster */}
+                <div className="flex-1 md:max-w-[33%]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Having Allied Department/Cluster ?
+                  </label>
+                  <select
+                    name="hasAlliedDepartment"
+                    value={formData.hasAlliedDepartment}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    required
+                  >
+                    <option value="">--Select--</option>
+                    {alliedOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Allied Department Section - Shows when "Yes" is selected */}
+              {formData.hasAlliedDepartment === "Yes" && (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <h4 className="text-md font-semibold text-gray-700 mb-4">
+                    Allied Department Details
+                  </h4>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    {/* Allied Program Level */}
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Program Level
+                      </label>
+                      <select
+                        name="alliedProgramLevel"
+                        value={formData.alliedProgramLevel}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        required
+                      >
+                        <option value="">--Select Level--</option>
+                        {programLevels.map((level) => (
+                          <option key={level.id} value={level.id}>
+                            {level.level}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Allied Program Name */}
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Program Name
+                      </label>
+                      <select
+                        name="alliedProgramName"
+                        value={formData.alliedProgramName}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        required
+                        disabled={!formData.alliedProgramLevel}
+                      >
+                        <option value="">--Select Program--</option>
+                        {alliedPrograms.map((program) => (
+                          <option key={program.id} value={program.id}>
+                            {program.programName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Allied Department/Cluster Name (Auto-filled) */}
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Allied Department/Cluster Name
+                      </label>
+                      <input
+                        type="text"
+                        name="alliedDepartmentName"
+                        value={formData.alliedDepartmentName}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 outline-none cursor-not-allowed"
+                        placeholder="Auto-filled based on program"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+              {/* Form Button */}
+              <div className="flex justify-end mt-8 pt-4 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting 
+                    ? (isEditMode ? "Updating..." : "Saving...") 
+                    : (isEditMode ? "Update Mapping" : "Save Mapping")}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Allied Mappings Table */}
+          <div className="mt-6">
+            {isLoadingMappings ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
+              </div>
+            ) : alliedMappings.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No allied mappings found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-blue-600 text-white">
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Sr.No.</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Program Level</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Program Name</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Department Name</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Has Allied</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Level</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Department</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Program</th>
+                      {isAdmin() && (
+                        <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Edit</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alliedMappings.map((mapping, index) => (
+                      <tr
+                        key={mapping.id}
+                        className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
+                      >
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{index + 1}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.programLevel || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.programName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.departmentName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.hasAlliedDepartment || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.alliedProgramLevel || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.alliedDepartmentName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.alliedProgramName || "-"}</td>
+                        {isAdmin() && (
+                          <td className="border border-gray-300 px-4 py-2 text-sm">
+                            <button
+                              type="button"
+                              onClick={() => handleEditMapping(mapping)}
+                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </main>
