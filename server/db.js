@@ -1,5 +1,6 @@
 const mysql = require("mysql2/promise");
 require("dotenv").config();
+const fs = require("fs");
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -10,6 +11,10 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+
+  ssl: {
+    minVersion: "TLSv1.2",
+  }
 });
 
 // Test the connection
