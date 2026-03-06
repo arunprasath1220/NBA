@@ -724,36 +724,40 @@ const AlliedCourseMapping = () => {
                   </thead>
                   <tbody>
                     {alliedMappings.map((group, index) => {
-                      const alliedCount = group.alliedPrograms?.length || 1;
-                      return group.alliedPrograms?.map((allied, alliedIndex) => (
-                        <tr
-                          key={`${group.groupId}-${allied.programId}`}
-                          className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
-                        >
-                          {alliedIndex === 0 && (
-                            <>
-                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{index + 1}</td>
-                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.programLevel || "-"}</td>
-                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.programName || "-"}</td>
-                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.departmentName || "-"}</td>
-                            </>
-                          )}
-                          <td className="border border-gray-300 px-4 py-2 text-sm">{allied.programLevel || "-"}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-sm">{allied.programName || "-"}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-sm">{allied.departmentName || "-"}</td>
-                          {isAdmin() && alliedIndex === 0 && (
-                            <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>
-                              <button
-                                type="button"
-                                onClick={() => handleEditMapping(group)}
-                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                              >
-                                Edit
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      )) || (
+                      const hasAllied = group.alliedPrograms && group.alliedPrograms.length > 0;
+                      const alliedCount = hasAllied ? group.alliedPrograms.length : 1;
+                      
+                      return hasAllied ? (
+                        group.alliedPrograms.map((allied, alliedIndex) => (
+                          <tr
+                            key={`${group.groupId}-${allied.programId}`}
+                            className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
+                          >
+                            {alliedIndex === 0 && (
+                              <>
+                                <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{index + 1}</td>
+                                <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.programLevel || "-"}</td>
+                                <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.programName || "-"}</td>
+                                <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.departmentName || "-"}</td>
+                              </>
+                            )}
+                            <td className="border border-gray-300 px-4 py-2 text-sm">{allied.programLevel || "-"}</td>
+                            <td className="border border-gray-300 px-4 py-2 text-sm">{allied.programName || "-"}</td>
+                            <td className="border border-gray-300 px-4 py-2 text-sm">{allied.departmentName || "-"}</td>
+                            {isAdmin() && alliedIndex === 0 && (
+                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditMapping(group)}
+                                  className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                >
+                                  Edit
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      ) : (
                         <tr key={group.groupId} className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}>
                           <td className="border border-gray-300 px-4 py-2 text-sm">{index + 1}</td>
                           <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programLevel || "-"}</td>
