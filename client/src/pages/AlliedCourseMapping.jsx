@@ -39,19 +39,16 @@ const AlliedCourseMapping = () => {
     programName: "",
     hasAlliedDepartment: "",
     departmentName: "",
-    // Allied department fields (shown when hasAlliedDepartment === "Yes")
-    alliedProgramLevel: "",
-    alliedDepartmentName: "",
-    alliedProgramName: "",
   });
+
+  // Multiple allied departments support
+  const [alliedDepartments, setAlliedDepartments] = useState(initialDraft?.alliedDepartments || []);
+  // Each entry: { id: uniqueId, programLevel: '', programName: '', departmentName: '', programsOptions: [] }
 
   // Dropdown options from API
   const [programLevels, setProgramLevels] = useState([]);
   const [programs, setPrograms] = useState([]);
   const alliedOptions = ["Yes", "No"];
-
-  // Allied dropdown options
-  const [alliedPrograms, setAlliedPrograms] = useState([]);
 
   // Allied mappings data from API
   const [alliedMappings, setAlliedMappings] = useState([]);
@@ -61,6 +58,7 @@ const AlliedCourseMapping = () => {
     try {
       const draft = {
         formData,
+        alliedDepartments,
         showForm,
         isEditMode,
         editingId,
@@ -83,7 +81,7 @@ const AlliedCourseMapping = () => {
   // Save draft whenever form data or form state changes
   useEffect(() => {
     saveDraft();
-  }, [formData, showForm, isEditMode, editingId]);
+  }, [formData, alliedDepartments, showForm, isEditMode, editingId]);
 
   // Restore dropdown data if draft has selections
   useEffect(() => {
@@ -91,8 +89,16 @@ const AlliedCourseMapping = () => {
       if (initialDraft?.formData?.programLevel) {
         await fetchProgramsByLevel(initialDraft.formData.programLevel);
       }
-      if (initialDraft?.formData?.alliedProgramLevel) {
-        await fetchAlliedProgramsByLevel(initialDraft.formData.alliedProgramLevel);
+      // Restore allied departments dropdown data
+      if (initialDraft?.alliedDepartments?.length > 0) {
+        for (const allied of initialDraft.alliedDepartments) {
+          if (allied.programLevel) {
+            const progs = await fetchProgramsForAllied(allied.programLevel);
+            setAlliedDepartments(prev => prev.map(a => 
+              a.id === allied.id ? { ...a, programsOptions: progs } : a
+            ));
+          }
+        }
       }
       // Mark restoration as complete after dropdowns are loaded
       setTimeout(() => {
@@ -154,36 +160,91 @@ const AlliedCourseMapping = () => {
     }
   };
 
-  // Fetch programs by level for allied section
-  const fetchAlliedProgramsByLevel = async (levelId) => {
+  // Fetch programs for allied section (returns data instead of setting state)
+  const fetchProgramsForAllied = async (levelId) => {
     try {
       const response = await fetch(`${API_URL}/programs/${levelId}`, {
         credentials: "include",
       });
       const data = await response.json();
       if (data.success) {
-        setAlliedPrograms(data.data);
+        return data.data;
       }
+      return [];
     } catch (error) {
       console.error("Error fetching allied programs:", error);
+      return [];
     }
   };
 
-  // Fetch department for allied program (auto-fill)
-  const fetchAlliedProgramDepartment = async (programId) => {
+  // Fetch department for allied program (returns department name)
+  const fetchDepartmentForAllied = async (programId) => {
     try {
       const response = await fetch(`${API_URL}/program/${programId}/department`, {
         credentials: "include",
       });
       const data = await response.json();
       if (data.success) {
-        setFormData((prev) => ({
-          ...prev,
-          alliedDepartmentName: data.data.departmentName || "",
-        }));
+        return data.data.departmentName || "";
       }
+      return "";
     } catch (error) {
       console.error("Error fetching allied program department:", error);
+      return "";
+    }
+  };
+
+  // Add a new allied department entry
+  const addAlliedDepartment = () => {
+    const newId = Date.now();
+    const newAllied = {
+      id: newId,
+      programLevel: formData.programLevel, // Auto-fill with main program level
+      programName: "",
+      departmentName: "",
+      programsOptions: [],
+    };
+    setAlliedDepartments((prev) => [...prev, newAllied]);
+    
+    // Fetch programs for the new allied department if level is set
+    if (formData.programLevel) {
+      fetchProgramsForAllied(formData.programLevel).then((progs) => {
+        setAlliedDepartments((prev) =>
+          prev.map((a) => (a.id === newId ? { ...a, programsOptions: progs } : a))
+        );
+      });
+    }
+  };
+
+  // Remove an allied department entry
+  const removeAlliedDepartment = (id) => {
+    setAlliedDepartments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  // Handle allied department field change
+  const handleAlliedChange = async (id, field, value) => {
+    setAlliedDepartments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, [field]: value } : a))
+    );
+
+    // If level changes, fetch new programs
+    if (field === "programLevel" && value) {
+      const progs = await fetchProgramsForAllied(value);
+      setAlliedDepartments((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, programsOptions: progs, programName: "", departmentName: "" }
+            : a
+        )
+      );
+    }
+
+    // If program changes, fetch department
+    if (field === "programName" && value) {
+      const deptName = await fetchDepartmentForAllied(value);
+      setAlliedDepartments((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, departmentName: deptName } : a))
+      );
     }
   };
 
@@ -248,56 +309,16 @@ const AlliedCourseMapping = () => {
     }
   }, [formData.programName]);
 
-  // Fetch allied programs when allied level changes
-  useEffect(() => {
-    if (formData.alliedProgramLevel) {
-      fetchAlliedProgramsByLevel(formData.alliedProgramLevel);
-      // Reset allied program and department when level changes (skip during draft restoration)
-      if (!isRestoringDraft.current) {
-        setFormData((prev) => ({
-          ...prev,
-          alliedProgramName: "",
-          alliedDepartmentName: "",
-        }));
-      }
-    } else {
-      setAlliedPrograms([]);
-    }
-  }, [formData.alliedProgramLevel]);
-
-  // Fetch allied department when allied program changes
-  useEffect(() => {
-    if (formData.alliedProgramName) {
-      fetchAlliedProgramDepartment(formData.alliedProgramName);
-    } else if (!isRestoringDraft.current) {
-      setFormData((prev) => ({
-        ...prev,
-        alliedDepartmentName: "",
-      }));
-    }
-  }, [formData.alliedProgramName]);
-
   // Handle hasAlliedDepartment changes
   useEffect(() => {
     if (isRestoringDraft.current) return;
     
-    if (formData.hasAlliedDepartment === "Yes") {
-      // Auto-fill allied program level with the main program level
-      if (formData.programLevel) {
-        setFormData((prev) => ({
-          ...prev,
-          alliedProgramLevel: formData.programLevel,
-        }));
-      }
+    if (formData.hasAlliedDepartment === "Yes" && alliedDepartments.length === 0) {
+      // Auto-add one allied department with main program level
+      addAlliedDepartment();
     } else if (formData.hasAlliedDepartment === "No") {
-      // Reset allied fields when "No" is selected
-      setFormData((prev) => ({
-        ...prev,
-        alliedProgramLevel: "",
-        alliedDepartmentName: "",
-        alliedProgramName: "",
-      }));
-      setAlliedPrograms([]);
+      // Clear allied departments when "No" is selected
+      setAlliedDepartments([]);
     }
   }, [formData.hasAlliedDepartment]);
 
@@ -325,6 +346,11 @@ const AlliedCourseMapping = () => {
         ? `${API_URL}/mapping/${editingId}`
         : `${API_URL}/mapping`;
       
+      // Collect all allied program IDs
+      const alliedProgramIds = alliedDepartments
+        .filter((a) => a.programName)
+        .map((a) => parseInt(a.programName));
+      
       const response = await fetch(url, {
         method: isEditMode ? "PUT" : "POST",
         headers: {
@@ -334,7 +360,7 @@ const AlliedCourseMapping = () => {
         body: JSON.stringify({
           programId: formData.programName,
           hasAlliedDepartment: formData.hasAlliedDepartment,
-          alliedProgramId: formData.alliedProgramName || null,
+          alliedProgramIds: alliedProgramIds.length > 0 ? alliedProgramIds : [],
         }),
       });
 
@@ -362,12 +388,9 @@ const AlliedCourseMapping = () => {
       programName: "",
       hasAlliedDepartment: "",
       departmentName: "",
-      alliedProgramLevel: "",
-      alliedDepartmentName: "",
-      alliedProgramName: "",
     });
     setPrograms([]);
-    setAlliedPrograms([]);
+    setAlliedDepartments([]);
     setShowForm(false);
     setIsEditMode(false);
     setEditingId(null);
@@ -387,34 +410,39 @@ const AlliedCourseMapping = () => {
 
   const handleEditMapping = async (group) => {
     const mainProgram = group.mainProgram;
-    const alliedProgram = group.alliedPrograms?.[0];
+    const alliedProgramsList = group.alliedPrograms || [];
     
-    // Populate form with mapping data
+    // Populate form with main program data
     setFormData({
       programLevel: mainProgram?.levelId?.toString() || "",
       programName: "",
-      hasAlliedDepartment: alliedProgram ? "Yes" : "No",
+      hasAlliedDepartment: alliedProgramsList.length > 0 ? "Yes" : "No",
       departmentName: mainProgram?.departmentName || "",
-      alliedProgramLevel: alliedProgram?.levelId?.toString() || "",
-      alliedDepartmentName: alliedProgram?.departmentName || "",
-      alliedProgramName: "",
     });
     
-    // Fetch programs for the level first
+    // Fetch programs for the main program level
     if (mainProgram?.levelId) {
       await fetchProgramsByLevel(mainProgram.levelId);
     }
     
-    // If has allied department, fetch allied programs
-    if (alliedProgram?.levelId) {
-      await fetchAlliedProgramsByLevel(alliedProgram.levelId);
+    // Build allied departments array from existing allied programs
+    const alliedDepts = [];
+    for (const allied of alliedProgramsList) {
+      const progs = allied.levelId ? await fetchProgramsForAllied(allied.levelId) : [];
+      alliedDepts.push({
+        id: Date.now() + Math.random(),
+        programLevel: allied.levelId?.toString() || "",
+        programName: allied.programId?.toString() || "",
+        departmentName: allied.departmentName || "",
+        programsOptions: progs,
+      });
     }
+    setAlliedDepartments(alliedDepts);
     
-    // Set program names after data is loaded
+    // Set main program name after programs are loaded
     setFormData((prev) => ({
       ...prev,
       programName: mainProgram?.programId?.toString() || "",
-      alliedProgramName: alliedProgram?.programId?.toString() || "",
     }));
     
     setEditingId(group.groupId);
@@ -550,70 +578,104 @@ const AlliedCourseMapping = () => {
               {/* Allied Department Section - Shows when "Yes" is selected */}
               {formData.hasAlliedDepartment === "Yes" && (
                 <div className="border-t border-gray-200 pt-4 mt-4">
-                  <h4 className="text-md font-semibold text-gray-700 mb-4">
-                    Allied Department Details
-                  </h4>
-                  <div className="flex flex-col md:flex-row gap-4">
-                    {/* Allied Program Level */}
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Program Level
-                      </label>
-                      <select
-                        name="alliedProgramLevel"
-                        value={formData.alliedProgramLevel}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                        required
-                      >
-                        <option value="">--Select Level--</option>
-                        {programLevels.map((level) => (
-                          <option key={level.id} value={level.id}>
-                            {level.level}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Allied Program Name */}
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Program Name
-                      </label>
-                      <select
-                        name="alliedProgramName"
-                        value={formData.alliedProgramName}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                        required
-                        disabled={!formData.alliedProgramLevel}
-                      >
-                        <option value="">--Select Program--</option>
-                        {alliedPrograms
-                          .filter((program) => program.id.toString() !== formData.programName)
-                          .map((program) => (
-                            <option key={program.id} value={program.id}>
-                              {program.programName}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    {/* Allied Department/Cluster Name (Auto-filled) */}
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Allied Department/Cluster Name
-                      </label>
-                      <input
-                        type="text"
-                        name="alliedDepartmentName"
-                        value={formData.alliedDepartmentName}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 outline-none cursor-not-allowed"
-                        placeholder="Auto-filled based on program"
-                        readOnly
-                      />
-                    </div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-md font-semibold text-gray-700">
+                      Allied Department Details
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={addAlliedDepartment}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm"
+                    >
+                      + Add Allied Department
+                    </button>
                   </div>
+                  
+                  {alliedDepartments.map((allied, index) => (
+                    <div key={allied.id} className="mb-4 p-4 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm font-medium text-gray-600">
+                          Allied Department {index + 1}
+                        </span>
+                        {alliedDepartments.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeAlliedDepartment(allied.id)}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-col md:flex-row gap-4">
+                        {/* Allied Program Level */}
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Program Level
+                          </label>
+                          <select
+                            value={allied.programLevel}
+                            onChange={(e) => handleAlliedChange(allied.id, "programLevel", e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            required
+                          >
+                            <option value="">--Select Level--</option>
+                            {programLevels.map((level) => (
+                              <option key={level.id} value={level.id}>
+                                {level.level}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Allied Program Name */}
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Program Name
+                          </label>
+                          <select
+                            value={allied.programName}
+                            onChange={(e) => handleAlliedChange(allied.id, "programName", e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            required
+                            disabled={!allied.programLevel}
+                          >
+                            <option value="">--Select Program--</option>
+                            {(allied.programsOptions || [])
+                              .filter((program) => {
+                                // Exclude main program and programs already selected in other allied departments
+                                const selectedIds = [
+                                  formData.programName,
+                                  ...alliedDepartments
+                                    .filter((a) => a.id !== allied.id)
+                                    .map((a) => a.programName)
+                                ];
+                                return !selectedIds.includes(program.id.toString());
+                              })
+                              .map((program) => (
+                                <option key={program.id} value={program.id}>
+                                  {program.programName}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        {/* Allied Department/Cluster Name (Auto-filled) */}
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Allied Department/Cluster Name
+                          </label>
+                          <input
+                            type="text"
+                            value={allied.departmentName}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 outline-none cursor-not-allowed"
+                            placeholder="Auto-filled based on program"
+                            readOnly
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -661,31 +723,59 @@ const AlliedCourseMapping = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {alliedMappings.map((group, index) => (
-                      <tr
-                        key={group.groupId}
-                        className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
-                      >
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{index + 1}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programLevel || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programName || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.departmentName || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.alliedPrograms?.[0]?.programLevel || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.alliedPrograms?.[0]?.programName || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.alliedPrograms?.[0]?.departmentName || "-"}</td>
-                        {isAdmin() && (
-                          <td className="border border-gray-300 px-4 py-2 text-sm">
-                            <button
-                              type="button"
-                              onClick={() => handleEditMapping(group)}
-                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
+                    {alliedMappings.map((group, index) => {
+                      const alliedCount = group.alliedPrograms?.length || 1;
+                      return group.alliedPrograms?.map((allied, alliedIndex) => (
+                        <tr
+                          key={`${group.groupId}-${allied.programId}`}
+                          className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
+                        >
+                          {alliedIndex === 0 && (
+                            <>
+                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{index + 1}</td>
+                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.programLevel || "-"}</td>
+                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.programName || "-"}</td>
+                              <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>{group.mainProgram?.departmentName || "-"}</td>
+                            </>
+                          )}
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{allied.programLevel || "-"}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{allied.programName || "-"}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{allied.departmentName || "-"}</td>
+                          {isAdmin() && alliedIndex === 0 && (
+                            <td className="border border-gray-300 px-4 py-2 text-sm" rowSpan={alliedCount}>
+                              <button
+                                type="button"
+                                onClick={() => handleEditMapping(group)}
+                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      )) || (
+                        <tr key={group.groupId} className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{index + 1}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programLevel || "-"}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programName || "-"}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.departmentName || "-"}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">-</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">-</td>
+                          <td className="border border-gray-300 px-4 py-2 text-sm">-</td>
+                          {isAdmin() && (
+                            <td className="border border-gray-300 px-4 py-2 text-sm">
+                              <button
+                                type="button"
+                                onClick={() => handleEditMapping(group)}
+                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

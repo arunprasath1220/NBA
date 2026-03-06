@@ -289,7 +289,7 @@ const addAlliedMapping = async (req, res) => {
     const { 
       programId, 
       hasAlliedDepartment,
-      alliedProgramId
+      alliedProgramIds // Now an array
     } = req.body;
 
     // Validate required fields
@@ -306,12 +306,12 @@ const addAlliedMapping = async (req, res) => {
       });
     }
 
-    // If "Yes" is selected, validate allied program
+    // If "Yes" is selected, validate allied programs
     if (hasAlliedDepartment === "Yes") {
-      if (!alliedProgramId) {
+      if (!alliedProgramIds || alliedProgramIds.length === 0) {
         return res.status(400).json({
           success: false,
-          error: "Allied program name is required",
+          error: "At least one allied program is required",
         });
       }
     }
@@ -329,18 +329,20 @@ const addAlliedMapping = async (req, res) => {
       });
     }
 
-    // If allied program is selected, check if it's already in a group
-    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
-      const [existingAllied] = await pool.execute(
-        "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ?",
-        [parseInt(alliedProgramId)]
-      );
+    // If allied programs are selected, check if any is already in a group
+    if (hasAlliedDepartment === "Yes" && alliedProgramIds && alliedProgramIds.length > 0) {
+      for (const alliedId of alliedProgramIds) {
+        const [existingAllied] = await pool.execute(
+          "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ?",
+          [parseInt(alliedId)]
+        );
 
-      if (existingAllied.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: "The allied program is already part of another allied group",
-        });
+        if (existingAllied.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: "One of the allied programs is already part of another allied group",
+          });
+        }
       }
     }
 
@@ -359,12 +361,14 @@ const addAlliedMapping = async (req, res) => {
       [groupId, parseInt(programId)]
     );
 
-    // If allied program is selected, insert it too
-    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
-      await connection.execute(
-        "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
-        [groupId, parseInt(alliedProgramId)]
-      );
+    // If allied programs are selected, insert them all
+    if (hasAlliedDepartment === "Yes" && alliedProgramIds && alliedProgramIds.length > 0) {
+      for (const alliedId of alliedProgramIds) {
+        await connection.execute(
+          "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
+          [groupId, parseInt(alliedId)]
+        );
+      }
     }
 
     // Commit transaction
@@ -376,7 +380,7 @@ const addAlliedMapping = async (req, res) => {
       data: {
         groupId: groupId,
         programId: parseInt(programId),
-        alliedProgramId: hasAlliedDepartment === "Yes" ? parseInt(alliedProgramId) : null,
+        alliedProgramIds: hasAlliedDepartment === "Yes" ? alliedProgramIds : [],
       },
     });
   } catch (error) {
@@ -404,7 +408,7 @@ const updateAlliedMapping = async (req, res) => {
     const { 
       programId, 
       hasAlliedDepartment,
-      alliedProgramId
+      alliedProgramIds // Now an array
     } = req.body;
 
     // Validate required fields
@@ -421,12 +425,12 @@ const updateAlliedMapping = async (req, res) => {
       });
     }
 
-    // If "Yes" is selected, validate allied program
+    // If "Yes" is selected, validate allied programs
     if (hasAlliedDepartment === "Yes") {
-      if (!alliedProgramId) {
+      if (!alliedProgramIds || alliedProgramIds.length === 0) {
         return res.status(400).json({
           success: false,
-          error: "Allied program name is required",
+          error: "At least one allied program is required",
         });
       }
     }
@@ -457,18 +461,20 @@ const updateAlliedMapping = async (req, res) => {
       });
     }
 
-    // If allied program is selected, check if it's in another group
-    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
-      const [existingAllied] = await pool.execute(
-        "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ? AND group_id != ?",
-        [parseInt(alliedProgramId), parseInt(groupId)]
-      );
+    // If allied programs are selected, check if any is in another group
+    if (hasAlliedDepartment === "Yes" && alliedProgramIds && alliedProgramIds.length > 0) {
+      for (const alliedId of alliedProgramIds) {
+        const [existingAllied] = await pool.execute(
+          "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ? AND group_id != ?",
+          [parseInt(alliedId), parseInt(groupId)]
+        );
 
-      if (existingAllied.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: "The allied program is already part of another allied group",
-        });
+        if (existingAllied.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: "One of the allied programs is already part of another allied group",
+          });
+        }
       }
     }
 
@@ -487,12 +493,14 @@ const updateAlliedMapping = async (req, res) => {
       [parseInt(groupId), parseInt(programId)]
     );
 
-    // If allied program is selected, insert it too
-    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
-      await connection.execute(
-        "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
-        [parseInt(groupId), parseInt(alliedProgramId)]
-      );
+    // If allied programs are selected, insert them all
+    if (hasAlliedDepartment === "Yes" && alliedProgramIds && alliedProgramIds.length > 0) {
+      for (const alliedId of alliedProgramIds) {
+        await connection.execute(
+          "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
+          [parseInt(groupId), parseInt(alliedId)]
+        );
+      }
     }
 
     // Commit transaction
