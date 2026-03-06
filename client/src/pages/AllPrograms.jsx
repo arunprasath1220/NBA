@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const AllPrograms = () => {
   const navigate = useNavigate();
@@ -225,6 +228,67 @@ const AllPrograms = () => {
     resetForm();
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    const exportData = filteredCourses.map((course, index) => ({
+      "Sr.No.": index + 1,
+      "Discipline": course.discipline || "-",
+      "Level of Program": course.level || "-",
+      "Name of the Program": course.programName || "-",
+      "Year of Start": course.yearStart || "-",
+      "Year of Close": course.yearEnd || "-",
+      "Name of The Department": course.departmentName || "-",
+    }));
+    
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "All Programs");
+    
+    worksheet["!cols"] = [
+      { wch: 8 },  // Sr.No.
+      { wch: 20 }, // Discipline
+      { wch: 18 }, // Level of Program
+      { wch: 30 }, // Name of the Program
+      { wch: 15 }, // Year of Start
+      { wch: 15 }, // Year of Close
+      { wch: 30 }, // Name of The Department
+    ];
+    
+    XLSX.writeFile(workbook, "All_Programs.xlsx");
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    const doc = new jsPDF("landscape");
+    
+    doc.setFontSize(16);
+    doc.text("All Programs", 14, 15);
+    
+    const tableHeaders = ["Sr.No.", "Discipline", "Level of Program", "Name of the Program", "Year of Start", "Year of Close", "Name of The Department"];
+    
+    const tableData = filteredCourses.map((course, index) => [
+      String(index + 1),
+      course.discipline || "-",
+      course.level || "-",
+      course.programName || "-",
+      course.yearStart?.toString() || "-",
+      course.yearEnd?.toString() || "-",
+      course.departmentName || "-",
+    ]);
+    
+    autoTable(doc, {
+      head: [tableHeaders],
+      body: tableData,
+      startY: 25,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [239, 246, 255] },
+      theme: "grid",
+    });
+    
+    doc.save("All_Programs.pdf");
+  };
+
   return (
     <div className="flex min-h-screen bg-white">
       <Navbar />
@@ -233,7 +297,7 @@ const AllPrograms = () => {
         <div className="pt-16 lg:pt-14 p-4">
           {/* Academic Year Filter and Add Course Link */}
           <div className="w-full">
-            <div className="flex justify-between items-center py-2 mb-4">
+            <div className="flex justify-between items-center py-2 mb-2">
               {/* Academic Year Dropdown */}
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700">
@@ -253,28 +317,56 @@ const AllPrograms = () => {
                 </select>
               </div>
 
-              {/* Add Course Link - Only for admin */}
-              {isAdmin() && (
-                <div>
-                  {!showForm ? (
+              {/* Export Buttons and Add Course Link */}
+              <div className="flex items-center gap-4">
+                {/* Export Buttons - Available to all users */}
+                {filteredCourses.length > 0 && (
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={handleAddNewCourse}
-                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                      onClick={exportToExcel}
+                      className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
                     >
-                      Add Course
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Excel
                     </button>
-                    ) : (
                     <button
                       type="button"
-                      onClick={handleCloseForm}
-                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                      onClick={exportToPDF}
+                      className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
                     >
-                      Close
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
                     </button>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+                {/* Add Course Link - Only for admin */}
+                {isAdmin() && (
+                  <div>
+                    {!showForm ? (
+                      <button
+                        type="button"
+                        onClick={handleAddNewCourse}
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                      >
+                        Add Course
+                      </button>
+                      ) : (
+                      <button
+                        type="button"
+                        onClick={handleCloseForm}
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -417,7 +509,7 @@ const AllPrograms = () => {
           )}
 
           {/* Courses Table */}
-          <div className="mt-6">
+          <div className="mt-2">
             {isLoadingCourses ? (
               <div className="flex justify-center items-center py-8">
                 <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>

@@ -5,6 +5,9 @@ import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const API_URL = "http://localhost:5000/api";
 const DRAFT_STORAGE_KEY = "institute_profile_draft";
@@ -271,6 +274,106 @@ const InstituteProfile = () => {
     setIsEditing(false);
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    const exportData = [
+      { "Field": "Program Applied For", "Value": formData.programAppliedFor || "-" },
+      { "Field": "A1. Name of the Institute", "Value": formData.instituteName || "-" },
+      { "Field": "Year of Establishment", "Value": formData.yearOfEstablishment || "-" },
+      { "Field": "Location of the Institute", "Value": formData.location || "-" },
+      { "Field": "A2. Address", "Value": formData.address || "-" },
+      { "Field": "City", "Value": formData.city || "-" },
+      { "Field": "State", "Value": formData.state || "-" },
+      { "Field": "Pin Code", "Value": formData.pinCode || "-" },
+      { "Field": "Website", "Value": formData.website || "-" },
+      { "Field": "Email", "Value": formData.email || "-" },
+      { "Field": "Phone No", "Value": formData.phoneNo || "-" },
+      { "Field": "A3. Head of Institution - Name", "Value": formData.headName || "-" },
+      { "Field": "Head Designation", "Value": formData.headDesignation || "-" },
+      { "Field": "Appointment Status", "Value": formData.appointmentStatus || "-" },
+      { "Field": "A4. Head Mobile No", "Value": formData.headMobileNo || "-" },
+      { "Field": "Head Telephone No", "Value": formData.headTelephoneNo || "-" },
+      { "Field": "Head Email", "Value": formData.headEmail || "-" },
+      { "Field": "A5. Affiliating University Name", "Value": formData.universityName || "-" },
+      { "Field": "University City", "Value": formData.universityCity || "-" },
+      { "Field": "University State", "Value": formData.universityState || "-" },
+      { "Field": "University Pin Code", "Value": formData.universityPinCode || "-" },
+      { "Field": "A6. Type of Institution", "Value": formData.institutionType || "-" },
+      { "Field": "A7. Ownership Status", "Value": formData.ownershipStatus || "-" },
+      { "Field": "Program Name", "Value": formData.programAppliedFor || "-" },
+      { "Field": "Discipline", "Value": formData.discipline || "-" },
+      { "Field": "Level", "Value": formData.level || "-" },
+      { "Field": "Tier", "Value": formData.tire || "-" },
+    ];
+    
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Institute Profile");
+    
+    worksheet["!cols"] = [
+      { wch: 35 }, // Field
+      { wch: 50 }, // Value
+    ];
+    
+    XLSX.writeFile(workbook, "Institute_Profile.xlsx");
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    const doc = new jsPDF("portrait");
+    
+    doc.setFontSize(16);
+    doc.text("Institute Profile", 14, 15);
+    
+    const tableHeaders = ["Field", "Value"];
+    
+    const tableData = [
+      ["Program Applied For", formData.programAppliedFor || "-"],
+      ["A1. Name of the Institute", formData.instituteName || "-"],
+      ["Year of Establishment", formData.yearOfEstablishment || "-"],
+      ["Location of the Institute", formData.location || "-"],
+      ["A2. Address", formData.address || "-"],
+      ["City", formData.city || "-"],
+      ["State", formData.state || "-"],
+      ["Pin Code", formData.pinCode || "-"],
+      ["Website", formData.website || "-"],
+      ["Email", formData.email || "-"],
+      ["Phone No", formData.phoneNo || "-"],
+      ["A3. Head of Institution - Name", formData.headName || "-"],
+      ["Head Designation", formData.headDesignation || "-"],
+      ["Appointment Status", formData.appointmentStatus || "-"],
+      ["A4. Head Mobile No", formData.headMobileNo || "-"],
+      ["Head Telephone No", formData.headTelephoneNo || "-"],
+      ["Head Email", formData.headEmail || "-"],
+      ["A5. Affiliating University Name", formData.universityName || "-"],
+      ["University City", formData.universityCity || "-"],
+      ["University State", formData.universityState || "-"],
+      ["University Pin Code", formData.universityPinCode || "-"],
+      ["A6. Type of Institution", formData.institutionType || "-"],
+      ["A7. Ownership Status", formData.ownershipStatus || "-"],
+      ["Program Name", formData.programAppliedFor || "-"],
+      ["Discipline", formData.discipline || "-"],
+      ["Level", formData.level || "-"],
+      ["Tier", formData.tire || "-"],
+    ];
+    
+    autoTable(doc, {
+      head: [tableHeaders],
+      body: tableData,
+      startY: 25,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [239, 246, 255] },
+      columnStyles: {
+        0: { cellWidth: 70, fontStyle: "bold" },
+        1: { cellWidth: 110 },
+      },
+      theme: "grid",
+    });
+    
+    doc.save("Institute_Profile.pdf");
+  };
+
   if (isLoading || isLoadingData) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -299,8 +402,31 @@ const InstituteProfile = () => {
                 )}
               </div>
               
-              {/* Right side - Edit/Back link */}
-              <div>
+              {/* Right side - Export buttons and Edit/Back link */}
+              <div className="flex items-center gap-4">
+                {/* Export Buttons - Available to all users */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={exportToExcel}
+                    className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Excel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportToPDF}
+                    className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    PDF
+                  </button>
+                </div>
                 {isEditing ? (
                   <button
                     type="button"
@@ -325,7 +451,31 @@ const InstituteProfile = () => {
               </div>
             </div>
           ) : (
-            <div className="py-4"></div>
+            <div className="flex justify-end items-center py-2">
+              {/* Export Buttons - Available to all users */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={exportToExcel}
+                  className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  PDF
+                </button>
+              </div>
+            </div>
           )}
           
           {/* Draft Saved Indicator */}

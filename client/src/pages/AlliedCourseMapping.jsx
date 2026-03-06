@@ -566,14 +566,14 @@ const AlliedCourseMapping = () => {
         <div className="pt-16 lg:pt-14 p-4">
           {/* Header with Add Mapping Link and Export Buttons */}
           <div className="w-full">
-            <div className="flex justify-end items-center gap-4 py-2 mb-4">
+            <div className="flex justify-end items-center gap-4 py-2 mb-2">
               {/* Export Buttons - Available to all users */}
               {alliedMappings.length > 0 && (
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={exportToExcel}
-                    className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium text-sm flex items-center gap-1"
+                    className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -583,7 +583,7 @@ const AlliedCourseMapping = () => {
                   <button
                     type="button"
                     onClick={exportToPDF}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-medium text-sm flex items-center gap-1"
+                    className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -829,7 +829,7 @@ const AlliedCourseMapping = () => {
           )}
 
           {/* Allied Mappings Table */}
-          <div className="mt-6">
+          <div className="mt-2">
             {isLoadingMappings ? (
               <div className="flex justify-center items-center py-8">
                 <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
