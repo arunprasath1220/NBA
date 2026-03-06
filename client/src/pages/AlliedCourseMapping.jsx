@@ -332,11 +332,8 @@ const AlliedCourseMapping = () => {
         },
         credentials: "include",
         body: JSON.stringify({
-          levelId: formData.programLevel,
           programId: formData.programName,
           hasAlliedDepartment: formData.hasAlliedDepartment,
-          alliedLevelId: formData.alliedProgramLevel || null,
-          alliedDepartmentName: formData.alliedDepartmentName || null,
           alliedProgramId: formData.alliedProgramName || null,
         }),
       });
@@ -388,36 +385,39 @@ const AlliedCourseMapping = () => {
     setShowForm(true);
   };
 
-  const handleEditMapping = async (mapping) => {
+  const handleEditMapping = async (group) => {
+    const mainProgram = group.mainProgram;
+    const alliedProgram = group.alliedPrograms?.[0];
+    
     // Populate form with mapping data
     setFormData({
-      programLevel: mapping.levelId?.toString() || "",
+      programLevel: mainProgram?.levelId?.toString() || "",
       programName: "",
-      hasAlliedDepartment: mapping.hasAlliedDepartment || "",
-      departmentName: mapping.departmentName || "",
-      alliedProgramLevel: mapping.alliedLevelId?.toString() || "",
-      alliedDepartmentName: mapping.alliedDepartmentName || "",
+      hasAlliedDepartment: alliedProgram ? "Yes" : "No",
+      departmentName: mainProgram?.departmentName || "",
+      alliedProgramLevel: alliedProgram?.levelId?.toString() || "",
+      alliedDepartmentName: alliedProgram?.departmentName || "",
       alliedProgramName: "",
     });
     
     // Fetch programs for the level first
-    if (mapping.levelId) {
-      await fetchProgramsByLevel(mapping.levelId);
+    if (mainProgram?.levelId) {
+      await fetchProgramsByLevel(mainProgram.levelId);
     }
     
     // If has allied department, fetch allied programs
-    if (mapping.hasAlliedDepartment === "Yes" && mapping.alliedLevelId) {
-      await fetchAlliedProgramsByLevel(mapping.alliedLevelId);
+    if (alliedProgram?.levelId) {
+      await fetchAlliedProgramsByLevel(alliedProgram.levelId);
     }
     
     // Set program names after data is loaded
     setFormData((prev) => ({
       ...prev,
-      programName: mapping.programId?.toString() || "",
-      alliedProgramName: mapping.alliedProgramId?.toString() || "",
+      programName: mainProgram?.programId?.toString() || "",
+      alliedProgramName: alliedProgram?.programId?.toString() || "",
     }));
     
-    setEditingId(mapping.id);
+    setEditingId(group.groupId);
     setIsEditMode(true);
     setShowForm(true);
   };
@@ -652,34 +652,32 @@ const AlliedCourseMapping = () => {
                       <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Program Level</th>
                       <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Program Name</th>
                       <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Department Name</th>
-                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Has Allied</th>
-                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Level</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Program Level</th>
+                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Program Name</th>
                       <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Department</th>
-                      <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Allied Program</th>
                       {isAdmin() && (
                         <th className="border border-blue-700 px-4 py-3 text-left text-sm font-semibold">Edit</th>
                       )}
                     </tr>
                   </thead>
                   <tbody>
-                    {alliedMappings.map((mapping, index) => (
+                    {alliedMappings.map((group, index) => (
                       <tr
-                        key={mapping.id}
+                        key={group.groupId}
                         className={index % 2 === 0 ? "bg-blue-50" : "bg-white"}
                       >
                         <td className="border border-gray-300 px-4 py-2 text-sm">{index + 1}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.programLevel || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.programName || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.departmentName || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.hasAlliedDepartment || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.alliedProgramLevel || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.alliedDepartmentName || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-sm">{mapping.alliedProgramName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programLevel || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.programName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.mainProgram?.departmentName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.alliedPrograms?.[0]?.programLevel || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.alliedPrograms?.[0]?.programName || "-"}</td>
+                        <td className="border border-gray-300 px-4 py-2 text-sm">{group.alliedPrograms?.[0]?.departmentName || "-"}</td>
                         {isAdmin() && (
                           <td className="border border-gray-300 px-4 py-2 text-sm">
                             <button
                               type="button"
-                              onClick={() => handleEditMapping(mapping)}
+                              onClick={() => handleEditMapping(group)}
                               className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                             >
                               Edit

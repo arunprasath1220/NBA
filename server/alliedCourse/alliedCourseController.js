@@ -219,37 +219,55 @@ const getProgramsByLevelAndDepartment = async (req, res) => {
 
 /**
  * Get All Allied Course Mappings
- * Returns all allied course mappings with joined data
+ * Returns all allied course groups with their mapped programs
  */
 const getAllAlliedMappings = async (req, res) => {
   try {
-    const [rows] = await pool.execute(
+    // Get all groups with their programs
+    const [groups] = await pool.execute(
       `SELECT 
-        acm.id,
-        acm.program_id as programId,
-        acm.level_id as levelId,
-        acm.has_allied_department as hasAlliedDepartment,
-        acm.allied_level_id as alliedLevelId,
-        acm.allied_department_name as alliedDepartmentName,
-        acm.allied_program_id as alliedProgramId,
-        pl.level as programLevel,
-        pn.coursename as programName,
-        ap.department_name as departmentName,
-        pl2.level as alliedProgramLevel,
-        pn2.coursename as alliedProgramName
-      FROM allied_course_mapping acm
-      LEFT JOIN program_level pl ON acm.level_id = pl.id
-      LEFT JOIN all_program ap ON acm.program_id = ap.id
-      LEFT JOIN program_name pn ON ap.programname = pn.id
-      LEFT JOIN program_level pl2 ON acm.allied_level_id = pl2.id
-      LEFT JOIN all_program ap2 ON acm.allied_program_id = ap2.id
-      LEFT JOIN program_name pn2 ON ap2.programname = pn2.id
-      ORDER BY acm.id DESC`
+        acg.id as groupId,
+        acg.created_at as createdAt
+      FROM allied_course_group acg
+      ORDER BY acg.id DESC`
     );
+
+    // For each group, get all programs
+    const result = [];
+    for (const group of groups) {
+      const [programs] = await pool.execute(
+        `SELECT 
+          acm.id as mappingId,
+          acm.program_id as programId,
+          pl.level as programLevel,
+          pl.id as levelId,
+          pn.coursename as programName,
+          ap.department_name as departmentName
+        FROM allied_course_mapping acm
+        LEFT JOIN all_program ap ON acm.program_id = ap.id
+        LEFT JOIN program_level pl ON ap.level = pl.id
+        LEFT JOIN program_name pn ON ap.programname = pn.id
+        WHERE acm.group_id = ?
+        ORDER BY acm.id ASC`,
+        [group.groupId]
+      );
+
+      if (programs.length > 0) {
+        result.push({
+          groupId: group.groupId,
+          createdAt: group.createdAt,
+          programs: programs,
+          // First program is the main program
+          mainProgram: programs[0],
+          // Rest are allied programs
+          alliedPrograms: programs.slice(1),
+        });
+      }
+    }
 
     res.json({
       success: true,
-      data: rows,
+      data: result,
     });
   } catch (error) {
     console.error("Error fetching allied mappings:", error);
@@ -262,26 +280,19 @@ const getAllAlliedMappings = async (req, res) => {
 
 /**
  * Add Allied Course Mapping
- * Creates a new allied course mapping
+ * Creates a new allied course group and maps programs to it
  */
 const addAlliedMapping = async (req, res) => {
+  const connection = await pool.getConnection();
+  
   try {
     const { 
-      levelId, 
       programId, 
       hasAlliedDepartment,
-      alliedLevelId,
-      alliedDepartmentName,
       alliedProgramId
     } = req.body;
 
     // Validate required fields
-    if (!levelId) {
-      return res.status(400).json({
-        success: false,
-        error: "Program level is required",
-      });
-    }
     if (!programId) {
       return res.status(400).json({
         success: false,
@@ -295,20 +306,8 @@ const addAlliedMapping = async (req, res) => {
       });
     }
 
-    // If "Yes" is selected, validate allied fields
+    // If "Yes" is selected, validate allied program
     if (hasAlliedDepartment === "Yes") {
-      if (!alliedLevelId) {
-        return res.status(400).json({
-          success: false,
-          error: "Allied program level is required",
-        });
-      }
-      if (!alliedDepartmentName) {
-        return res.status(400).json({
-          success: false,
-          error: "Allied department name is required",
-        });
-      }
       if (!alliedProgramId) {
         return res.status(400).json({
           success: false,
@@ -317,78 +316,98 @@ const addAlliedMapping = async (req, res) => {
       }
     }
 
-    // Check if mapping already exists for this program
-    const [existing] = await pool.execute(
-      "SELECT id FROM allied_course_mapping WHERE program_id = ?",
+    // Check if main program is already in a group
+    const [existingMain] = await pool.execute(
+      "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ?",
       [parseInt(programId)]
     );
 
-    if (existing.length > 0) {
+    if (existingMain.length > 0) {
       return res.status(400).json({
         success: false,
-        error: "Allied mapping already exists for this program",
+        error: "This program is already part of an allied group",
       });
     }
 
-    // Insert the mapping
-    const [result] = await pool.execute(
-      `INSERT INTO allied_course_mapping (level_id, program_id, has_allied_department, allied_level_id, allied_department_name, allied_program_id) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        parseInt(levelId),
-        parseInt(programId),
-        hasAlliedDepartment,
-        hasAlliedDepartment === "Yes" ? parseInt(alliedLevelId) : null,
-        hasAlliedDepartment === "Yes" ? alliedDepartmentName : null,
-        hasAlliedDepartment === "Yes" ? parseInt(alliedProgramId) : null,
-      ]
+    // If allied program is selected, check if it's already in a group
+    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
+      const [existingAllied] = await pool.execute(
+        "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ?",
+        [parseInt(alliedProgramId)]
+      );
+
+      if (existingAllied.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: "The allied program is already part of another allied group",
+        });
+      }
+    }
+
+    // Start transaction
+    await connection.beginTransaction();
+
+    // Create a new allied course group
+    const [groupResult] = await connection.execute(
+      "INSERT INTO allied_course_group () VALUES ()"
     );
+    const groupId = groupResult.insertId;
+
+    // Insert the main program into the mapping
+    await connection.execute(
+      "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
+      [groupId, parseInt(programId)]
+    );
+
+    // If allied program is selected, insert it too
+    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
+      await connection.execute(
+        "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
+        [groupId, parseInt(alliedProgramId)]
+      );
+    }
+
+    // Commit transaction
+    await connection.commit();
 
     res.status(201).json({
       success: true,
       message: "Allied course mapping added successfully",
       data: {
-        id: result.insertId,
-        levelId: parseInt(levelId),
+        groupId: groupId,
         programId: parseInt(programId),
-        hasAlliedDepartment,
-        alliedLevelId: hasAlliedDepartment === "Yes" ? parseInt(alliedLevelId) : null,
-        alliedDepartmentName: hasAlliedDepartment === "Yes" ? alliedDepartmentName : null,
         alliedProgramId: hasAlliedDepartment === "Yes" ? parseInt(alliedProgramId) : null,
       },
     });
   } catch (error) {
+    // Rollback on error
+    await connection.rollback();
     console.error("Error adding allied mapping:", error);
     res.status(500).json({
       success: false,
       error: "Failed to add allied mapping",
     });
+  } finally {
+    connection.release();
   }
 };
 
 /**
  * Update Allied Course Mapping
- * Updates an existing allied course mapping
+ * Updates an existing allied course group
  */
 const updateAlliedMapping = async (req, res) => {
+  const connection = await pool.getConnection();
+  
   try {
-    const { id } = req.params;
+    const { groupId } = req.params;
     const { 
-      levelId, 
       programId, 
       hasAlliedDepartment,
-      alliedLevelId,
-      alliedDepartmentName,
       alliedProgramId
     } = req.body;
 
     // Validate required fields
-    if (!levelId) {
-      return res.status(400).json({
-        success: false,
-        error: "Program level is required",
-      });
-    }
     if (!programId) {
       return res.status(400).json({
         success: false,
@@ -402,20 +421,8 @@ const updateAlliedMapping = async (req, res) => {
       });
     }
 
-    // If "Yes" is selected, validate allied fields
+    // If "Yes" is selected, validate allied program
     if (hasAlliedDepartment === "Yes") {
-      if (!alliedLevelId) {
-        return res.status(400).json({
-          success: false,
-          error: "Allied program level is required",
-        });
-      }
-      if (!alliedDepartmentName) {
-        return res.status(400).json({
-          success: false,
-          error: "Allied department name is required",
-        });
-      }
       if (!alliedProgramId) {
         return res.status(400).json({
           success: false,
@@ -424,84 +431,125 @@ const updateAlliedMapping = async (req, res) => {
       }
     }
 
-    // Check if the mapping exists
-    const [existing] = await pool.execute(
-      "SELECT id FROM allied_course_mapping WHERE id = ?",
-      [parseInt(id)]
+    // Check if the group exists
+    const [existingGroup] = await pool.execute(
+      "SELECT id FROM allied_course_group WHERE id = ?",
+      [parseInt(groupId)]
     );
 
-    if (existing.length === 0) {
+    if (existingGroup.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "Allied mapping not found",
+        error: "Allied group not found",
       });
     }
 
-    // Update the mapping
-    await pool.execute(
-      `UPDATE allied_course_mapping 
-       SET level_id = ?, program_id = ?, has_allied_department = ?, allied_level_id = ?, allied_department_name = ?, allied_program_id = ?
-       WHERE id = ?`,
-      [
-        parseInt(levelId),
-        parseInt(programId),
-        hasAlliedDepartment,
-        hasAlliedDepartment === "Yes" ? parseInt(alliedLevelId) : null,
-        hasAlliedDepartment === "Yes" ? alliedDepartmentName : null,
-        hasAlliedDepartment === "Yes" ? parseInt(alliedProgramId) : null,
-        parseInt(id),
-      ]
+    // Check if new program is already in another group
+    const [existingMain] = await pool.execute(
+      "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ? AND group_id != ?",
+      [parseInt(programId), parseInt(groupId)]
     );
+
+    if (existingMain.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "This program is already part of another allied group",
+      });
+    }
+
+    // If allied program is selected, check if it's in another group
+    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
+      const [existingAllied] = await pool.execute(
+        "SELECT id, group_id FROM allied_course_mapping WHERE program_id = ? AND group_id != ?",
+        [parseInt(alliedProgramId), parseInt(groupId)]
+      );
+
+      if (existingAllied.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: "The allied program is already part of another allied group",
+        });
+      }
+    }
+
+    // Start transaction
+    await connection.beginTransaction();
+
+    // Delete existing mappings for this group
+    await connection.execute(
+      "DELETE FROM allied_course_mapping WHERE group_id = ?",
+      [parseInt(groupId)]
+    );
+
+    // Insert the main program
+    await connection.execute(
+      "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
+      [parseInt(groupId), parseInt(programId)]
+    );
+
+    // If allied program is selected, insert it too
+    if (hasAlliedDepartment === "Yes" && alliedProgramId) {
+      await connection.execute(
+        "INSERT INTO allied_course_mapping (group_id, program_id) VALUES (?, ?)",
+        [parseInt(groupId), parseInt(alliedProgramId)]
+      );
+    }
+
+    // Commit transaction
+    await connection.commit();
 
     res.json({
       success: true,
       message: "Allied course mapping updated successfully",
     });
   } catch (error) {
+    await connection.rollback();
     console.error("Error updating allied mapping:", error);
     res.status(500).json({
       success: false,
       error: "Failed to update allied mapping",
     });
+  } finally {
+    connection.release();
   }
 };
 
 /**
- * Delete Allied Course Mapping
- * Deletes an existing allied course mapping
+ * Delete Allied Course Group
+ * Deletes an existing allied course group (cascade deletes mappings)
  */
 const deleteAlliedMapping = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { groupId } = req.params;
 
-    // Check if the mapping exists
+    // Check if the group exists
     const [existing] = await pool.execute(
-      "SELECT id FROM allied_course_mapping WHERE id = ?",
-      [parseInt(id)]
+      "SELECT id FROM allied_course_group WHERE id = ?",
+      [parseInt(groupId)]
     );
 
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "Allied mapping not found",
+        error: "Allied group not found",
       });
     }
 
-    // Delete the mapping
+    // Delete the group (CASCADE will delete mappings)
     await pool.execute(
-      "DELETE FROM allied_course_mapping WHERE id = ?",
-      [parseInt(id)]
+      "DELETE FROM allied_course_group WHERE id = ?",
+      [parseInt(groupId)]
     );
 
     res.json({
       success: true,
-      message: "Allied course mapping deleted successfully",
+      message: "Allied course group deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting allied mapping:", error);
+    console.error("Error deleting allied group:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to delete allied mapping",
+      error: "Failed to delete allied group",
     });
   }
 };

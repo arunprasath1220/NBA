@@ -98,15 +98,15 @@ router.post(
 
 // Update an allied course mapping - only accessible by admin
 router.put(
-  "/mapping/:id",
+  "/mapping/:groupId",
   authenticateToken,
   authorizeRoles("admin"),
   updateAlliedMapping
 );
 
-// Delete an allied course mapping - only accessible by admin
+// Delete an allied course group - only accessible by admin
 router.delete(
-  "/mapping/:id",
+  "/mapping/:groupId",
   authenticateToken,
   authorizeRoles("admin"),
   deleteAlliedMapping
