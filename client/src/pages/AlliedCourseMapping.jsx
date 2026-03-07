@@ -14,14 +14,35 @@ const DRAFT_STORAGE_KEY = "alliedCourseMappingDraft";
 const AlliedCourseMapping = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
-  const { selectedProgramLabel } = useFilterStore();
+  const { selectedProgramLabel, selectedAcademicYear, academicYearOptions } = useFilterStore();
+
+  const getPreviousAcademicYear = (academicYear) => {
+    if (!academicYear || !/^\d{4}-\d{2}$/.test(academicYear)) {
+      return "";
+    }
+
+    const startYear = Number.parseInt(academicYear.slice(0, 4), 10);
+    const previousStartYear = startYear - 1;
+    const previousEndYear = String(startYear).slice(-2);
+    return `${previousStartYear}-${previousEndYear}`;
+  };
+
+  const buildAcademicYearQuery = () => {
+    if (!selectedAcademicYear) {
+      return "";
+    }
+    return `?academicYear=${encodeURIComponent(selectedAcademicYear)}`;
+  };
   
   // Load draft from localStorage on initial render
   const loadDraft = () => {
     try {
       const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (savedDraft) {
-        return JSON.parse(savedDraft);
+        const parsed = JSON.parse(savedDraft);
+        if (parsed.academicYear === selectedAcademicYear) {
+          return parsed;
+        }
       }
     } catch (error) {
       console.error("Error loading draft:", error);
@@ -34,9 +55,14 @@ const AlliedCourseMapping = () => {
   
   const [showForm, setShowForm] = useState(initialDraft?.showForm || false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importSourceYear, setImportSourceYear] = useState("");
+  const [importOverwrite, setImportOverwrite] = useState(false);
   const [isLoadingMappings, setIsLoadingMappings] = useState(false);
   const [isEditMode, setIsEditMode] = useState(initialDraft?.isEditMode || false);
   const [editingId, setEditingId] = useState(initialDraft?.editingId || null);
+  const [editingGroupProgramIds, setEditingGroupProgramIds] = useState([]);
 
   // Form state for allied course mapping
   const [formData, setFormData] = useState(initialDraft?.formData || {
@@ -65,10 +91,21 @@ const AlliedCourseMapping = () => {
     return departmentName || parentProgramName || "";
   };
 
+  const sourceYearOptions = (() => {
+    const years = new Set(academicYearOptions || []);
+    const previous = getPreviousAcademicYear(selectedAcademicYear);
+    if (previous) {
+      years.add(previous);
+    }
+    years.delete(selectedAcademicYear);
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  })();
+
   // Save draft to localStorage whenever form state changes
   const saveDraft = () => {
     try {
       const draft = {
+        academicYear: selectedAcademicYear,
         formData,
         alliedDepartments,
         showForm,
@@ -142,7 +179,7 @@ const AlliedCourseMapping = () => {
   // Fetch programs by level from API
   const fetchProgramsByLevel = async (levelId) => {
     try {
-      const response = await fetch(`${API_URL}/programs/${levelId}`, {
+      const response = await fetch(`${API_URL}/programs/${levelId}${buildAcademicYearQuery()}`, {
         credentials: "include",
       });
       const data = await response.json();
@@ -157,7 +194,7 @@ const AlliedCourseMapping = () => {
   // Fetch programs for allied section (returns data instead of setting state)
   const fetchProgramsForAllied = async (levelId) => {
     try {
-      const response = await fetch(`${API_URL}/programs/${levelId}`, {
+      const response = await fetch(`${API_URL}/programs/${levelId}${buildAcademicYearQuery()}`, {
         credentials: "include",
       });
       const data = await response.json();
@@ -237,7 +274,7 @@ const AlliedCourseMapping = () => {
   const fetchAlliedMappings = async () => {
     setIsLoadingMappings(true);
     try {
-      const response = await fetch(`${API_URL}/mappings`, {
+      const response = await fetch(`${API_URL}/mappings${buildAcademicYearQuery()}`, {
         credentials: "include",
       });
       const data = await response.json();
@@ -261,9 +298,13 @@ const AlliedCourseMapping = () => {
   useEffect(() => {
     if (isAuthenticated) {
       fetchProgramLevels();
-      fetchAlliedMappings();
+      if (selectedAcademicYear) {
+        fetchAlliedMappings();
+      } else {
+        setAlliedMappings([]);
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedAcademicYear]);
 
   // Fetch programs when level changes
   useEffect(() => {
@@ -304,15 +345,25 @@ const AlliedCourseMapping = () => {
     }
   }, [formData.programName, programs]);
 
-  const filteredAlliedMappings = selectedProgramLabel
-    ? alliedMappings.filter((group) => {
+  const filteredAlliedMappings = alliedMappings
+    .filter((group) => !selectedAcademicYear || group.academicYear === selectedAcademicYear)
+    .filter((group) => !selectedProgramLabel || (() => {
         const mainMatch = group.mainProgram?.programName === selectedProgramLabel;
         const alliedMatch = (group.alliedPrograms || []).some(
           (allied) => allied.programName === selectedProgramLabel,
         );
         return mainMatch || alliedMatch;
-      })
-    : alliedMappings;
+      })());
+
+  const mappedProgramIds = new Set(
+    alliedMappings.flatMap((group) =>
+      [group.mainProgram, ...(group.alliedPrograms || [])]
+        .map((program) => String(program?.programId || ""))
+        .filter(Boolean),
+    ),
+  );
+
+  const editableProgramIds = new Set(editingGroupProgramIds.map((id) => String(id)));
 
   // Handle hasAlliedDepartment changes
   useEffect(() => {
@@ -345,6 +396,11 @@ const AlliedCourseMapping = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedAcademicYear) {
+      alert("Please select an academic year from the top bar before saving a mapping.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const url = isEditMode 
@@ -364,6 +420,7 @@ const AlliedCourseMapping = () => {
         credentials: "include",
         body: JSON.stringify({
           programId: formData.programName,
+          academicYear: selectedAcademicYear,
           hasAlliedDepartment: formData.hasAlliedDepartment,
           alliedProgramIds: alliedProgramIds.length > 0 ? alliedProgramIds : [],
         }),
@@ -387,6 +444,56 @@ const AlliedCourseMapping = () => {
     }
   };
 
+  const handleImportFromOldYear = async () => {
+    if (!selectedAcademicYear) {
+      alert("Please select a target academic year in the top bar before importing.");
+      return;
+    }
+
+    if (!importSourceYear) {
+      alert("Please choose a source academic year from the dropdown.");
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+
+      const response = await fetch(`${API_URL}/mappings/import-year`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          sourceAcademicYear: importSourceYear.trim(),
+          targetAcademicYear: selectedAcademicYear,
+          overwrite: importOverwrite,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const skippedCount = data?.data?.skippedProgramCount || 0;
+        const summary = skippedCount > 0
+          ? `${data.message}\nSkipped programs: ${skippedCount}`
+          : (data.message || "Imported mapping data successfully");
+        alert(summary);
+        setShowImportPanel(false);
+        setImportSourceYear("");
+        setImportOverwrite(false);
+        fetchAlliedMappings();
+      } else {
+        alert(data.error || "Failed to import mapping data");
+      }
+    } catch (error) {
+      console.error("Error importing mapping data:", error);
+      alert("Failed to import mapping data. Please try again.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const resetForm = (clearStorage = false) => {
     setFormData({
       programLevel: "",
@@ -399,6 +506,7 @@ const AlliedCourseMapping = () => {
     setShowForm(false);
     setIsEditMode(false);
     setEditingId(null);
+    setEditingGroupProgramIds([]);
     if (clearStorage) {
       clearDraft();
     }
@@ -521,6 +629,9 @@ const AlliedCourseMapping = () => {
   const handleEditMapping = async (group) => {
     const mainProgram = group.mainProgram;
     const alliedProgramsList = group.alliedPrograms || [];
+    const groupProgramIds = [mainProgram?.programId, ...alliedProgramsList.map((p) => p.programId)]
+      .filter((id) => id !== null && id !== undefined)
+      .map((id) => Number.parseInt(id, 10));
     
     // Populate form with main program data
     setFormData({
@@ -556,6 +667,7 @@ const AlliedCourseMapping = () => {
     }));
     
     setEditingId(group.groupId);
+    setEditingGroupProgramIds(groupProgramIds);
     setIsEditMode(true);
     setShowForm(true);
   };
@@ -566,6 +678,10 @@ const AlliedCourseMapping = () => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="pt-16 lg:pt-14 p-4">
+          <div className="mb-2 text-sm text-gray-600">
+            Academic Year: <span className="font-semibold text-gray-800">{selectedAcademicYear || "Not selected"}</span>
+          </div>
+
           {/* Header with Add Mapping Link and Export Buttons */}
           <div className="w-full">
             <div className="flex justify-end items-center gap-4 py-2 mb-2">
@@ -596,7 +712,20 @@ const AlliedCourseMapping = () => {
               )}
               {/* Add Mapping Link - Only for admin */}
               {isAdmin() && (
-                <div>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showImportPanel;
+                      setShowImportPanel(next);
+                      if (next) {
+                        setImportSourceYear(getPreviousAcademicYear(selectedAcademicYear));
+                      }
+                    }}
+                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                  >
+                    Import Old Year Data
+                  </button>
                   {!showForm ? (
                     <button
                       type="button"
@@ -618,6 +747,61 @@ const AlliedCourseMapping = () => {
               )}
             </div>
           </div>
+
+          {isAdmin() && showImportPanel && (
+            <div className="mb-4 p-4 border border-blue-100 bg-blue-50 rounded-lg">
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">
+                Import Mapping Data To {selectedAcademicYear || "Selected Year"}
+              </h4>
+              <div className="flex flex-col md:flex-row gap-4 md:items-end">
+                <div className="flex-1 max-w-xs">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Source Academic Year
+                  </label>
+                  <select
+                    value={importSourceYear}
+                    onChange={(e) => setImportSourceYear(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="">--Select Source Year--</option>
+                    {sourceYearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={importOverwrite}
+                    onChange={(e) => setImportOverwrite(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Overwrite existing target-year mappings
+                </label>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleImportFromOldYear}
+                    disabled={isImporting}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {isImporting ? "Importing..." : "Import"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowImportPanel(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Admin Only: Allied Course Mapping Form */}
           {isAdmin() && showForm && (
@@ -662,7 +846,17 @@ const AlliedCourseMapping = () => {
                     disabled={!formData.programLevel}
                   >
                     <option value="">--Select Program--</option>
-                    {programs.map((program) => (
+                    {programs
+                      .filter((program) => {
+                        const id = String(program.id);
+                        // While creating, hide programs already present in year mappings.
+                        // While editing, keep current group's mapped programs selectable.
+                        if (editableProgramIds.has(id)) {
+                          return true;
+                        }
+                        return !mappedProgramIds.has(id);
+                      })
+                      .map((program) => (
                       <option key={program.id} value={program.id}>
                         {program.programName}
                       </option>
@@ -785,7 +979,18 @@ const AlliedCourseMapping = () => {
                                     .filter((a) => a.id !== allied.id)
                                     .map((a) => a.programName)
                                 ];
-                                return !selectedIds.includes(program.id.toString());
+                                const programId = program.id.toString();
+                                if (selectedIds.includes(programId)) {
+                                  return false;
+                                }
+
+                                // Hide already mapped programs when creating.
+                                // Keep current group's values visible during edit.
+                                if (editableProgramIds.has(programId)) {
+                                  return true;
+                                }
+
+                                return !mappedProgramIds.has(programId);
                               })
                               .map((program) => (
                                 <option key={program.id} value={program.id}>
@@ -836,9 +1041,13 @@ const AlliedCourseMapping = () => {
               <div className="flex justify-center items-center py-8">
                 <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
               </div>
+            ) : !selectedAcademicYear ? (
+              <div className="text-center py-8 text-gray-500">
+                Select an academic year in the top bar to view allied mappings.
+              </div>
             ) : filteredAlliedMappings.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No allied mappings found for the selected global filters.
+                No allied mappings found for {selectedAcademicYear}.
               </div>
             ) : (
               <div className="overflow-x-auto">
