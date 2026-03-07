@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
+import useFilterStore from "../store/filterStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 import Snackbar from "@mui/material/Snackbar";
@@ -15,6 +16,7 @@ const DRAFT_STORAGE_KEY = "institute_profile_draft";
 const InstituteProfile = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
+  const { selectedProgramId, selectedProgramLabel } = useFilterStore();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -61,8 +63,6 @@ const InstituteProfile = () => {
     level: "",
   });
 
-  const [programNames, setProgramNames] = useState([]);
-
   // Fetch institute profile data
   const fetchInstituteProfile = async () => {
     try {
@@ -76,7 +76,8 @@ const InstituteProfile = () => {
 
       if (data.success && data.data) {
         setFormData({
-          programAppliedFor: data.data.programAppliedFor || "",
+          // Global top-bar program selection should take precedence on this page.
+          programAppliedFor: selectedProgramLabel || data.data.programAppliedFor || "",
           instituteName: data.data.instituteName || "",
           yearOfEstablishment: data.data.yearOfEstablishment || "",
           location: data.data.location || "",
@@ -113,24 +114,6 @@ const InstituteProfile = () => {
     }
   };
 
-  // Fetch program names for dropdown
-  const fetchProgramNames = async () => {
-    try {
-      const response = await fetch(`${API_URL}/institute/programs`, {
-        method: "GET",
-        credentials: "include",
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        setProgramNames(data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching program names:", error);
-    }
-  };
-
   // Fetch program details (level, discipline) by program ID
   const fetchProgramDetails = async (programId) => {
     try {
@@ -153,28 +136,6 @@ const InstituteProfile = () => {
     }
   };
 
-  // Handle program selection - fetch level and discipline
-  const handleProgramChange = (e) => {
-    const selectedCoursename = e.target.value;
-    const selectedProgram = programNames.find((p) => p.coursename === selectedCoursename);
-    
-    setFormData((prev) => ({
-      ...prev,
-      programAppliedFor: selectedCoursename,
-    }));
-
-    if (selectedProgram) {
-      fetchProgramDetails(selectedProgram.id);
-    } else {
-      // Clear level and discipline if no program selected
-      setFormData((prev) => ({
-        ...prev,
-        level: "",
-        discipline: "",
-      }));
-    }
-  };
-
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate("/login");
@@ -184,9 +145,26 @@ const InstituteProfile = () => {
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       fetchInstituteProfile();
-      fetchProgramNames();
     }
   }, [isAuthenticated, isLoading]);
+
+  // Keep program info in sync with global top bar selection.
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      programAppliedFor: selectedProgramLabel || "",
+    }));
+
+    if (selectedProgramId) {
+      fetchProgramDetails(selectedProgramId);
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        level: "",
+        discipline: "",
+      }));
+    }
+  }, [selectedProgramId, selectedProgramLabel]);
 
   // Auto-save draft to localStorage whenever formData changes
   useEffect(() => {
@@ -208,12 +186,16 @@ const InstituteProfile = () => {
     if (savedDraft) {
       try {
         const draftData = JSON.parse(savedDraft);
-        setFormData(draftData);
+        setFormData({
+          ...draftData,
+          // Keep draft values, but never override global selected program label.
+          programAppliedFor: selectedProgramLabel || draftData.programAppliedFor || "",
+        });
       } catch (error) {
         console.error("Error loading draft:", error);
       }
     }
-  }, []);
+  }, [selectedProgramLabel]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -374,7 +356,7 @@ const InstituteProfile = () => {
     doc.save("Institute_Profile.pdf");
   };
 
-  if (isLoading || isLoadingData) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
@@ -392,6 +374,12 @@ const InstituteProfile = () => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="pt-16 lg:pt-14 p-4">
+          {isLoadingData ? (
+            <div className="flex justify-center items-center py-16">
+              <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <>
           {/* Edit/Back Link - Only for admin */}
           {isAdmin() ? (
             <div className="flex justify-between items-center py-2">
@@ -496,15 +484,12 @@ const InstituteProfile = () => {
                         <select
                           name="programAppliedFor"
                           value={formData.programAppliedFor}
-                          onChange={handleProgramChange}
-                          className="bg-white border border-gray-300 rounded text-sm text-gray-900 ml-1 px-2 py-1 w-64 cursor-pointer"
+                          disabled
+                          className="bg-gray-100 border border-gray-300 rounded text-sm text-gray-700 ml-1 px-2 py-1 w-64 cursor-not-allowed"
                         >
-                          <option value="">Select Program</option>
-                          {programNames.map((program) => (
-                            <option key={program.id} value={program.coursename}>
-                              {program.coursename}
-                            </option>
-                          ))}
+                          <option value="">
+                            {selectedProgramLabel ? selectedProgramLabel : "Select Program in Top Bar"}
+                          </option>
                         </select>
                       </td>
                     </tr>
@@ -909,6 +894,8 @@ const InstituteProfile = () => {
                 </div>
               )}
             </form>
+            </>
+          )}
         </div>
       </main>
     </div>

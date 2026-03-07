@@ -4,6 +4,7 @@ import useAuthStore from "../store/authStore";
 import nbaLogo from "../assets/National_Board_of_Accreditation.svg.png";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+console.log(GOOGLE_CLIENT_ID)
 
 const Login = () => {
   const navigate = useNavigate();
