@@ -62,6 +62,7 @@ const AlliedCourseMapping = () => {
   const [isLoadingMappings, setIsLoadingMappings] = useState(false);
   const [isEditMode, setIsEditMode] = useState(initialDraft?.isEditMode || false);
   const [editingId, setEditingId] = useState(initialDraft?.editingId || null);
+  const [editingGroupProgramIds, setEditingGroupProgramIds] = useState([]);
 
   // Form state for allied course mapping
   const [formData, setFormData] = useState(initialDraft?.formData || {
@@ -354,6 +355,16 @@ const AlliedCourseMapping = () => {
         return mainMatch || alliedMatch;
       })());
 
+  const mappedProgramIds = new Set(
+    alliedMappings.flatMap((group) =>
+      [group.mainProgram, ...(group.alliedPrograms || [])]
+        .map((program) => String(program?.programId || ""))
+        .filter(Boolean),
+    ),
+  );
+
+  const editableProgramIds = new Set(editingGroupProgramIds.map((id) => String(id)));
+
   // Handle hasAlliedDepartment changes
   useEffect(() => {
     if (isRestoringDraft.current) return;
@@ -495,6 +506,7 @@ const AlliedCourseMapping = () => {
     setShowForm(false);
     setIsEditMode(false);
     setEditingId(null);
+    setEditingGroupProgramIds([]);
     if (clearStorage) {
       clearDraft();
     }
@@ -617,6 +629,9 @@ const AlliedCourseMapping = () => {
   const handleEditMapping = async (group) => {
     const mainProgram = group.mainProgram;
     const alliedProgramsList = group.alliedPrograms || [];
+    const groupProgramIds = [mainProgram?.programId, ...alliedProgramsList.map((p) => p.programId)]
+      .filter((id) => id !== null && id !== undefined)
+      .map((id) => Number.parseInt(id, 10));
     
     // Populate form with main program data
     setFormData({
@@ -652,6 +667,7 @@ const AlliedCourseMapping = () => {
     }));
     
     setEditingId(group.groupId);
+    setEditingGroupProgramIds(groupProgramIds);
     setIsEditMode(true);
     setShowForm(true);
   };
@@ -830,7 +846,17 @@ const AlliedCourseMapping = () => {
                     disabled={!formData.programLevel}
                   >
                     <option value="">--Select Program--</option>
-                    {programs.map((program) => (
+                    {programs
+                      .filter((program) => {
+                        const id = String(program.id);
+                        // While creating, hide programs already present in year mappings.
+                        // While editing, keep current group's mapped programs selectable.
+                        if (editableProgramIds.has(id)) {
+                          return true;
+                        }
+                        return !mappedProgramIds.has(id);
+                      })
+                      .map((program) => (
                       <option key={program.id} value={program.id}>
                         {program.programName}
                       </option>
@@ -953,7 +979,18 @@ const AlliedCourseMapping = () => {
                                     .filter((a) => a.id !== allied.id)
                                     .map((a) => a.programName)
                                 ];
-                                return !selectedIds.includes(program.id.toString());
+                                const programId = program.id.toString();
+                                if (selectedIds.includes(programId)) {
+                                  return false;
+                                }
+
+                                // Hide already mapped programs when creating.
+                                // Keep current group's values visible during edit.
+                                if (editableProgramIds.has(programId)) {
+                                  return true;
+                                }
+
+                                return !mappedProgramIds.has(programId);
                               })
                               .map((program) => (
                                 <option key={program.id} value={program.id}>
