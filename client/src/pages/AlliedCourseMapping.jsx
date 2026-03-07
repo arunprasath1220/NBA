@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
+import useFilterStore from "../store/filterStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 import * as XLSX from "xlsx";
@@ -13,6 +14,7 @@ const DRAFT_STORAGE_KEY = "alliedCourseMappingDraft";
 const AlliedCourseMapping = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
+  const { selectedProgramLabel } = useFilterStore();
   
   // Load draft from localStorage on initial render
   const loadDraft = () => {
@@ -55,6 +57,13 @@ const AlliedCourseMapping = () => {
 
   // Allied mappings data from API
   const [alliedMappings, setAlliedMappings] = useState([]);
+
+  const formatDepartmentWithParent = (departmentName, parentProgramName) => {
+    if (departmentName && parentProgramName) {
+      return `${departmentName} (${parentProgramName})`;
+    }
+    return departmentName || parentProgramName || "";
+  };
 
   // Save draft to localStorage whenever form state changes
   const saveDraft = () => {
@@ -145,24 +154,6 @@ const AlliedCourseMapping = () => {
     }
   };
 
-  // Fetch department for a program
-  const fetchProgramDepartment = async (programId) => {
-    try {
-      const response = await fetch(`${API_URL}/program/${programId}/department`, {
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (data.success) {
-        setFormData((prev) => ({
-          ...prev,
-          departmentName: data.data.departmentName || "",
-        }));
-      }
-    } catch (error) {
-      console.error("Error fetching program department:", error);
-    }
-  };
-
   // Fetch programs for allied section (returns data instead of setting state)
   const fetchProgramsForAllied = async (levelId) => {
     try {
@@ -177,23 +168,6 @@ const AlliedCourseMapping = () => {
     } catch (error) {
       console.error("Error fetching allied programs:", error);
       return [];
-    }
-  };
-
-  // Fetch department for allied program (returns department name)
-  const fetchDepartmentForAllied = async (programId) => {
-    try {
-      const response = await fetch(`${API_URL}/program/${programId}/department`, {
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (data.success) {
-        return data.data.departmentName || "";
-      }
-      return "";
-    } catch (error) {
-      console.error("Error fetching allied program department:", error);
-      return "";
     }
   };
 
@@ -242,9 +216,17 @@ const AlliedCourseMapping = () => {
       );
     }
 
-    // If program changes, fetch department
+    // If program changes, derive department + parent label from selected option
     if (field === "programName" && value) {
-      const deptName = await fetchDepartmentForAllied(value);
+      const currentAllied = alliedDepartments.find((a) => a.id === id);
+      const selectedProgram = (currentAllied?.programsOptions || []).find(
+        (program) => String(program.id) === String(value),
+      );
+      const deptName = formatDepartmentWithParent(
+        selectedProgram?.departmentName,
+        selectedProgram?.programName,
+      );
+
       setAlliedDepartments((prev) =>
         prev.map((a) => (a.id === id ? { ...a, departmentName: deptName } : a))
       );
@@ -300,17 +282,37 @@ const AlliedCourseMapping = () => {
     }
   }, [formData.programLevel]);
 
-  // Fetch department when program changes
+  // Resolve main department when main program changes
   useEffect(() => {
     if (formData.programName) {
-      fetchProgramDepartment(formData.programName);
+      const selectedProgram = programs.find(
+        (program) => String(program.id) === String(formData.programName),
+      );
+
+      setFormData((prev) => ({
+        ...prev,
+        departmentName: formatDepartmentWithParent(
+          selectedProgram?.departmentName,
+          selectedProgram?.programName,
+        ),
+      }));
     } else if (!isRestoringDraft.current) {
       setFormData((prev) => ({
         ...prev,
         departmentName: "",
       }));
     }
-  }, [formData.programName]);
+  }, [formData.programName, programs]);
+
+  const filteredAlliedMappings = selectedProgramLabel
+    ? alliedMappings.filter((group) => {
+        const mainMatch = group.mainProgram?.programName === selectedProgramLabel;
+        const alliedMatch = (group.alliedPrograms || []).some(
+          (allied) => allied.programName === selectedProgramLabel,
+        );
+        return mainMatch || alliedMatch;
+      })
+    : alliedMappings;
 
   // Handle hasAlliedDepartment changes
   useEffect(() => {
@@ -405,7 +407,7 @@ const AlliedCourseMapping = () => {
   // Prepare flat data for export
   const prepareExportData = () => {
     const exportData = [];
-    alliedMappings.forEach((group, index) => {
+    filteredAlliedMappings.forEach((group, index) => {
       const hasAllied = group.alliedPrograms && group.alliedPrograms.length > 0;
       if (hasAllied) {
         group.alliedPrograms.forEach((allied, alliedIndex) => {
@@ -466,7 +468,7 @@ const AlliedCourseMapping = () => {
     
     const tableData = [];
     
-    alliedMappings.forEach((group, index) => {
+    filteredAlliedMappings.forEach((group, index) => {
       const hasAllied = group.alliedPrograms && group.alliedPrograms.length > 0;
       
       if (hasAllied) {
@@ -568,7 +570,7 @@ const AlliedCourseMapping = () => {
           <div className="w-full">
             <div className="flex justify-end items-center gap-4 py-2 mb-2">
               {/* Export Buttons - Available to all users */}
-              {alliedMappings.length > 0 && (
+              {filteredAlliedMappings.length > 0 && (
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -764,7 +766,7 @@ const AlliedCourseMapping = () => {
                         {/* Allied Program Name */}
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Program Name
+                            Department / Parent Program
                           </label>
                           <select
                             value={allied.programName}
@@ -787,7 +789,7 @@ const AlliedCourseMapping = () => {
                               })
                               .map((program) => (
                                 <option key={program.id} value={program.id}>
-                                  {program.programName}
+                                  {formatDepartmentWithParent(program.departmentName, program.programName)}
                                 </option>
                               ))}
                           </select>
@@ -834,9 +836,9 @@ const AlliedCourseMapping = () => {
               <div className="flex justify-center items-center py-8">
                 <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
               </div>
-            ) : alliedMappings.length === 0 ? (
+            ) : filteredAlliedMappings.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No allied mappings found.
+                No allied mappings found for the selected global filters.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -856,7 +858,7 @@ const AlliedCourseMapping = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {alliedMappings.map((group, index) => {
+                    {filteredAlliedMappings.map((group, index) => {
                       const hasAllied = group.alliedPrograms && group.alliedPrograms.length > 0;
                       const alliedCount = hasAllied ? group.alliedPrograms.length : 1;
                       

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
+import useFilterStore from "../store/filterStore";
 import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 import * as XLSX from "xlsx";
@@ -10,6 +11,7 @@ import autoTable from "jspdf-autotable";
 const AllPrograms = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
+  const { selectedAcademicYear } = useFilterStore();
   const [showForm, setShowForm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState(null);
@@ -31,15 +33,11 @@ const AllPrograms = () => {
   const [courses, setCourses] = useState([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
 
-  // State for academic year filter
-  const [academicYear, setAcademicYear] = useState("");
-  const academicYearOptions = ["2025-26", "2026-27", "2027-28", "2028-29"];
-
   // Filter courses based on selected academic year
-  const filteredCourses = academicYear
+  const filteredCourses = selectedAcademicYear
     ? courses.filter((course) => {
         // Extract the start year from academic year (e.g., "2026-27" -> 2026)
-        const selectedStartYear = parseInt(academicYear.split("-")[0]);
+        const selectedStartYear = parseInt(selectedAcademicYear.split("-")[0]);
         
         // Show courses with no year of close
         if (!course.yearEnd) {
@@ -298,23 +296,14 @@ const AllPrograms = () => {
           {/* Academic Year Filter and Add Course Link */}
           <div className="w-full">
             <div className="flex justify-between items-center py-2 mb-2">
-              {/* Academic Year Dropdown */}
+              {/* Academic Year Dropdown (Global Selector Preview) */}
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700">
                   Academic Year:
                 </label>
-                <select
-                  value={academicYear}
-                  onChange={(e) => setAcademicYear(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                >
-                  <option value="">--Select Year--</option>
-                  {academicYearOptions.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
+                <span className="px-3 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-sm text-gray-700">
+                  {selectedAcademicYear || "All Academic Years"}
+                </span>
               </div>
 
               {/* Export Buttons and Add Course Link */}
