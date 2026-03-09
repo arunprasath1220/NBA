@@ -293,69 +293,62 @@ const AllPrograms = () => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="pt-16 lg:pt-14 p-4">
-          {/* Academic Year Filter and Add Course Link */}
-          <div className="w-full">
-            <div className="flex justify-between items-center py-2 mb-2">
-              {/* Academic Year Dropdown (Global Selector Preview) */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Academic Year:
-                </label>
-                <span className="px-3 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-sm text-gray-700">
-                  {selectedAcademicYear || "All Academic Years"}
-                </span>
-              </div>
+          {/* Academic Year Display */}
+          <div className="mb-3 text-sm text-gray-700">
+            Academic Year: <span className="font-semibold text-gray-800">{selectedAcademicYear || "Not selected"}</span>
+          </div>
 
-              {/* Export Buttons and Add Course Link */}
-              <div className="flex items-center gap-4">
-                {/* Export Buttons - Available to all users */}
-                {filteredCourses.length > 0 && (
-                  <div className="flex gap-2">
+          {/* All Programs Heading with Action Buttons */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">All Programs</h2>
+            <div className="flex items-center gap-4">
+              {/* Export Buttons - Available to all users */}
+              {filteredCourses.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={exportToExcel}
+                    className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Excel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportToPDF}
+                    className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    PDF
+                  </button>
+                </>
+              )}
+              {/* Add Course Link - Only for admin */}
+              {isAdmin() && (
+                <>
+                  {!showForm ? (
                     <button
                       type="button"
-                      onClick={exportToExcel}
-                      className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
+                      onClick={handleAddNewCourse}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Excel
+                      Add Course
                     </button>
+                  ) : (
                     <button
                       type="button"
-                      onClick={exportToPDF}
-                      className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
+                      onClick={handleCloseForm}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      PDF
+                      Close
                     </button>
-                  </div>
-                )}
-                {/* Add Course Link - Only for admin */}
-                {isAdmin() && (
-                  <div>
-                    {!showForm ? (
-                      <button
-                        type="button"
-                        onClick={handleAddNewCourse}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                      >
-                        Add Course
-                      </button>
-                      ) : (
-                      <button
-                        type="button"
-                        onClick={handleCloseForm}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                      >
-                        Close
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

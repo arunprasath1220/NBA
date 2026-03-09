@@ -682,72 +682,6 @@ const AlliedCourseMapping = () => {
             Academic Year: <span className="font-semibold text-gray-800">{selectedAcademicYear || "Not selected"}</span>
           </div>
 
-          {/* Header with Add Mapping Link and Export Buttons */}
-          <div className="w-full">
-            <div className="flex justify-end items-center gap-4 py-2 mb-2">
-              {/* Export Buttons - Available to all users */}
-              {filteredAlliedMappings.length > 0 && (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={exportToExcel}
-                    className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Excel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={exportToPDF}
-                    className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    PDF
-                  </button>
-                </div>
-              )}
-              {/* Add Mapping Link - Only for admin */}
-              {isAdmin() && (
-                <div className="flex items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !showImportPanel;
-                      setShowImportPanel(next);
-                      if (next) {
-                        setImportSourceYear(getPreviousAcademicYear(selectedAcademicYear));
-                      }
-                    }}
-                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                  >
-                    Import Old Year Data
-                  </button>
-                  {!showForm ? (
-                    <button
-                      type="button"
-                      onClick={handleAddNewMapping}
-                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                    >
-                      Map Allied Course
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleCloseForm}
-                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                    >
-                      Close
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
           {isAdmin() && showImportPanel && (
             <div className="mb-4 p-4 border border-blue-100 bg-blue-50 rounded-lg">
               <h4 className="text-sm font-semibold text-gray-800 mb-3">
@@ -1036,7 +970,70 @@ const AlliedCourseMapping = () => {
           )}
 
           {/* Allied Mappings Table */}
-          <div className="mt-2">
+          <div className="w-full">
+            <div className="flex justify-between items-center py-2 mb-2">
+              <h3 className="text-base font-semibold text-gray-800">Allied Course Mappings</h3>
+              <div className="flex items-center gap-4">
+                {filteredAlliedMappings.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={exportToExcel}
+                      className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportToPDF}
+                      className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
+                    </button>
+                  </>
+                )}
+                {isAdmin() && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !showImportPanel;
+                        setShowImportPanel(next);
+                        if (next) {
+                          setImportSourceYear(getPreviousAcademicYear(selectedAcademicYear));
+                        }
+                      }}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Import Old Year Data
+                    </button>
+                    {!showForm ? (
+                      <button
+                        type="button"
+                        onClick={handleAddNewMapping}
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                      >
+                        Map Allied Course
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCloseForm}
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
             {isLoadingMappings ? (
               <div className="flex justify-center items-center py-8">
                 <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>

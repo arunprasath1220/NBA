@@ -380,91 +380,65 @@ const InstituteProfile = () => {
             </div>
           ) : (
             <>
-          {/* Edit/Back Link - Only for admin */}
-          {isAdmin() ? (
-            <div className="flex justify-between items-center py-2">
-              {/* Left side - Edit mode indicator */}
-              <div>
-                {isEditing && (
-                  <span className="text-gray-500 text-sm">You are in edit page</span>
-                )}
-              </div>
-              
-              {/* Right side - Export buttons and Edit/Back link */}
-              <div className="flex items-center gap-4">
-                {/* Export Buttons - Available to all users */}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={exportToExcel}
-                    className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Excel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={exportToPDF}
-                    className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    PDF
-                  </button>
-                </div>
-                {isEditing ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditing(false);
-                      fetchInstituteProfile();
-                      setMessage({ type: "", text: "" });
-                    }}
-                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                  >
-                    Back to page
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-end items-center py-2">
+          {/* Academic Year Display */}
+          <div className="mb-3 text-sm text-gray-700">
+            Program Applied For: <span className="font-semibold text-gray-800">{formData.programAppliedFor || "Not selected"}</span>
+            {isEditing && <span className="ml-4 text-gray-500 italic">You are in edit mode</span>}
+          </div>
+
+          {/* Institute Profile Heading with Action Buttons */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Institute Profile</h2>
+            <div className="flex items-center gap-4">
               {/* Export Buttons - Available to all users */}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={exportToExcel}
-                  className="px-3 py-1.5 border-2 border-green-600 text-green-600 bg-transparent rounded hover:bg-green-50 transition-colors font-medium text-sm flex items-center gap-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={exportToPDF}
-                  className="px-3 py-1.5 border-2 border-red-600 text-red-600 bg-transparent rounded hover:bg-red-50 transition-colors font-medium text-sm flex items-center gap-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  PDF
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={exportToExcel}
+                className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Excel
+              </button>
+              <button
+                type="button"
+                onClick={exportToPDF}
+                className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                PDF
+              </button>
+              {/* Edit/Back Link - Only for admin */}
+              {isAdmin() && (
+                <>
+                  {isEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditing(false);
+                        fetchInstituteProfile();
+                        setMessage({ type: "", text: "" });
+                      }}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Back to page
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </>
+              )}
             </div>
-          )}
+          </div>
           
           {/* Draft Saved Indicator */}
           {draftSaved && isEditing && (
