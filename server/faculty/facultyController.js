@@ -277,30 +277,42 @@ const bulkAddFaculty = async (req, res) => {
 
       if (!departmentName || !programName || !facultyName) {
         invalidCount += 1;
+        const errorMsg = "department_name, program_name, and faculty_name are required";
+        console.log(`[Row ${rowNumber}] INVALID: ${errorMsg}`, {
+          department_name: departmentName,
+          program_name: programName,
+          faculty_name: facultyName
+        });
         issues.push({
           rowNumber,
           type: "invalid",
-          message: "department_name, program_name, and faculty_name are required",
+          message: errorMsg,
         });
         continue;
       }
 
       if (programCandidates.length === 0) {
         invalidCount += 1;
+        const errorMsg = `No program mapping found for department '${departmentName}' and program '${programName}'`;
+        console.log(`[Row ${rowNumber}] INVALID: ${errorMsg}`);
         issues.push({
           rowNumber,
           type: "invalid",
-          message: `No program mapping found for department '${departmentName}' and program '${programName}'`,
+          message: errorMsg,
         });
         continue;
       }
 
       if (programCandidates.length > 1) {
         invalidCount += 1;
+        const errorMsg = `Ambiguous mapping for department '${departmentName}' and program '${programName}'. Please use a unique program combination.`;
+        console.log(`[Row ${rowNumber}] INVALID: ${errorMsg}`, {
+          candidateProgramIds: programCandidates
+        });
         issues.push({
           rowNumber,
           type: "invalid",
-          message: `Ambiguous mapping for department '${departmentName}' and program '${programName}'. Please use a unique program combination.`,
+          message: errorMsg,
         });
         continue;
       }
@@ -310,10 +322,15 @@ const bulkAddFaculty = async (req, res) => {
 
       if (existingFacultyKeys.has(duplicateKey)) {
         duplicateCount += 1;
+        const errorMsg = `Faculty '${facultyName}' already exists for the selected program`;
+        console.log(`[Row ${rowNumber}] DUPLICATE: ${errorMsg}`, {
+          program_id: resolvedProgramId,
+          faculty_name: facultyName
+        });
         issues.push({
           rowNumber,
           type: "duplicate",
-          message: `Faculty '${facultyName}' already exists for the selected program`,
+          message: errorMsg,
         });
         continue;
       }
@@ -345,10 +362,16 @@ const bulkAddFaculty = async (req, res) => {
         existingFacultyKeys.add(duplicateKey);
       } catch (insertError) {
         invalidCount += 1;
+        const errorMsg = `Failed to insert row: ${insertError.message}`;
+        console.log(`[Row ${rowNumber}] INSERT ERROR: ${errorMsg}`, {
+          faculty_name: facultyName,
+          program_id: resolvedProgramId,
+          error: insertError
+        });
         issues.push({
           rowNumber,
           type: "invalid",
-          message: `Failed to insert row: ${insertError.message}`,
+          message: errorMsg,
         });
       }
     }
@@ -417,7 +440,16 @@ const getFaculty = async (req, res) => {
       params.push(resolvedProgramId);
     }
 
-    sql += " ORDER BY id DESC";
+    sql += ` ORDER BY 
+      CASE WHEN f.is_hod_principal = 'Yes' THEN 0 ELSE 1 END,
+      CASE 
+        WHEN f.present_designation LIKE '%Professor%' AND f.present_designation NOT LIKE '%Associate%' AND f.present_designation NOT LIKE '%Assistant%' THEN 1
+        WHEN f.present_designation LIKE '%Associate%Professor%' THEN 2
+        WHEN f.present_designation LIKE '%Assistant%Professor%' THEN 3
+        ELSE 4
+      END,
+      CASE WHEN f.experience_years IS NULL THEN 1 ELSE 0 END,
+      f.experience_years DESC`;
 
     const [rows] = await pool.query(sql, params);
     return res.json({ success: true, data: rows });
