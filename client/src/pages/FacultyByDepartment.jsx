@@ -179,16 +179,9 @@ const FacultyByDepartment = ({ role, programId }) => {
               )}
             </div>
 
-            {!isAdmin() ? (
-              <div className="text-gray-700">
-                <h2 className="text-xl font-semibold mb-2">Unauthorized</h2>
-                <p>You must be an admin to add faculty.</p>
-              </div>
-            ) : (
-                <>
-                  {/* If admin, show the form only when showForm is true. Toggle via top-right button. */}
-                  {showForm ? (
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Admin-only form */}
+            {isAdmin() && showForm && (
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
 
         {/* Program (select) */}
         <div className="flex flex-col">
@@ -453,18 +446,17 @@ const FacultyByDepartment = ({ role, programId }) => {
           type="submit"
           className="col-span-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium"
         >
-          Add Faculty
+          {editMode ? "Update Faculty" : "Add Faculty"}
         </button>
 
       </form>
-                    ) : (
-                      <div className="text-gray-600">Click <span className="text-blue-600 font-medium">Add Faculty</span> at the top-right to open the form.</div>
-                    )}
-                  {/* Faculty list */}
-                  <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-3 text-gray-800">Faculty List</h3>
-                    {facultyList.length === 0 ? (
-                      <div className="text-sm text-gray-500">No faculty records found.</div>
+            )}
+
+            {/* Faculty list - visible to both admin and user */}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-3 text-gray-800">Faculty List</h3>
+              {facultyList.length === 0 ? (
+                <div className="text-sm text-gray-500">No faculty records found.</div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs border-collapse border border-gray-300">
@@ -485,7 +477,6 @@ const FacultyByDepartment = ({ role, programId }) => {
                               <th className="px-3 py-3 border border-gray-300 font-semibold">Nature of Association</th>
                               <th className="px-3 py-3 border border-gray-300 font-semibold">Working Currently</th>
                               <th className="px-3 py-3 border border-gray-300 font-semibold">Date of Leaving</th>
-                              <th className="px-3 py-3 border border-gray-300 font-semibold">Nature of Separation</th>
                               <th className="px-3 py-3 border border-gray-300 font-semibold">Experience (in years)</th>
                               <th className="px-3 py-3 border border-gray-300 font-semibold">Is HoD / Principal</th>
                               <th className="px-3 py-3 border border-gray-300 font-semibold">Actions</th>
@@ -509,11 +500,14 @@ const FacultyByDepartment = ({ role, programId }) => {
                                 <td className="px-3 py-2 border border-gray-300">{row.nature_of_association || '-'}</td>
                                 <td className="px-3 py-2 border border-gray-300 text-center">{row.working_presently || '-'}</td>
                                 <td className="px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString('en-GB') : '-'}</td>
-                                <td className="px-3 py-2 border border-gray-300">{row.nature_of_separation || '-'}</td>
                                 <td className="px-3 py-2 border border-gray-300 text-center">{row.experience_years || '-'}</td>
                                 <td className="px-3 py-2 border border-gray-300 text-center">{row.is_hod_principal || '-'}</td>
                                 <td className="px-3 py-2 border border-gray-300 text-center whitespace-nowrap">
-                                  <button type="button" onClick={() => handleEdit(row)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">Edit</button>
+                                  {isAdmin() ? (
+                                    <button type="button" onClick={() => handleEdit(row)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">Edit</button>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -521,9 +515,7 @@ const FacultyByDepartment = ({ role, programId }) => {
                         </table>
                       </div>
                     )}
-                  </div>
-                </>
-              )}
+                </div>
             </div>
           </div>
         </main>
@@ -531,4 +523,4 @@ const FacultyByDepartment = ({ role, programId }) => {
     );
   };
 
-  export default FacultyByDepartment;
+export default FacultyByDepartment;
