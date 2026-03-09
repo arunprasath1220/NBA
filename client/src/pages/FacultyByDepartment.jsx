@@ -28,6 +28,10 @@ const FacultyByDepartment = ({ role, programId }) => {
     experience_years: ""
   });
 
+  const [facultyList, setFacultyList] = useState([]);
+  const [editMode, setEditMode] = useState(false);
+  const [editId, setEditId] = useState(null);
+
   // Control showing the add form (hidden by default)
   const [showForm, setShowForm] = useState(false);
 
@@ -39,6 +43,26 @@ const FacultyByDepartment = ({ role, programId }) => {
       setFormData((prev) => ({ ...prev, program_id: selectedProgramId }));
     }
   }, [selectedProgramId]);
+
+  // Fetch faculty list whenever program selection changes or on mount
+  useEffect(() => {
+    fetchFaculty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProgramId]);
+
+  const fetchFaculty = async () => {
+    try {
+      const resp = await axios.get("http://localhost:5000/api/faculty", {
+        params: selectedProgramId ? { program_id: selectedProgramId } : {},
+        withCredentials: true,
+      });
+      if (resp.data && resp.data.success) {
+        setFacultyList(resp.data.data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching faculty:", err);
+    }
+  };
 
   // Filter programs by selectedAcademicYear (same logic used elsewhere)
   const filteredPrograms = programs && programs.length > 0
@@ -69,9 +93,16 @@ const FacultyByDepartment = ({ role, programId }) => {
         ...formData
       };
 
-      await axios.post("http://localhost:5000/api/faculty/add", payload);
+      if (editMode && editId) {
+        await axios.put(`http://localhost:5000/api/faculty/${editId}`, payload, { withCredentials: true });
+        alert("Faculty updated successfully");
+      } else {
+        await axios.post("http://localhost:5000/api/faculty/add", payload, { withCredentials: true });
+        alert("Faculty added successfully");
+      }
 
-      alert("Faculty added successfully");
+      // Refresh list
+      fetchFaculty();
 
       setFormData({
         program_id: programId || "",
@@ -89,12 +120,43 @@ const FacultyByDepartment = ({ role, programId }) => {
         working_presently: "",
         is_hod_principal: "No",
         experience_years: ""
+
       });
+
+      // reset edit state
+      setEditMode(false);
+      setEditId(null);
 
     } catch (error) {
       console.error(error);
-      alert("Error adding faculty");
+      alert("Error saving faculty: " + (error?.response?.data?.error || error.message));
     }
+  };
+
+  const handleEdit = (row) => {
+    // Row contains program_id (pld.id) and program_name_id (program_name.id) from server
+    setFormData({
+      program_id: row.program_name_id ? String(row.program_name_id) : String(row.program_id || ""),
+      faculty_name: row.faculty_name || "",
+      pan_no: row.pan_no || "",
+      apaar_faculty_id: row.apaar_faculty_id || "",
+      highest_degree: row.highest_degree || "",
+      university_name: row.university_name || "",
+      area_of_specialization: row.area_of_specialization || "",
+      date_of_joining: row.date_of_joining ? row.date_of_joining.split("T")[0] : "",
+      designation_at_joining: row.designation_at_joining || "",
+      present_designation: row.present_designation || "",
+      date_designated_as_prof: row.date_designated_as_prof ? row.date_designated_as_prof.split("T")[0] : "",
+      date_of_receiving_highest_degree: row.date_of_receiving_highest_degree ? row.date_of_receiving_highest_degree.split("T")[0] : "",
+      working_presently: row.working_presently || "",
+      nature_of_association: row.nature_of_association || "Regular",
+      date_of_leaving: row.date_of_leaving ? row.date_of_leaving.split("T")[0] : "",
+      experience_years: row.experience_years || "",
+      is_hod_principal: row.is_hod_principal || "No",
+    });
+    setEditMode(true);
+    setEditId(row.id);
+    setShowForm(true);
   };
 
   return (
@@ -103,7 +165,7 @@ const FacultyByDepartment = ({ role, programId }) => {
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
         <div className="p-6 pt-16 lg:pt-14">
-          <div className="max-w-4xl mx-auto">
+          <div className="w-full">
             <div className="flex justify-end items-center mb-6">
               {isAdmin() && (
                 <button
@@ -117,13 +179,12 @@ const FacultyByDepartment = ({ role, programId }) => {
               )}
             </div>
 
-            <div className="border border-gray-100 p-6 bg-white">
-              {!isAdmin() ? (
-                <div className="text-gray-700">
-                  <h2 className="text-xl font-semibold mb-2">Unauthorized</h2>
-                  <p>You must be an admin to add faculty.</p>
-                </div>
-              ) : (
+            {!isAdmin() ? (
+              <div className="text-gray-700">
+                <h2 className="text-xl font-semibold mb-2">Unauthorized</h2>
+                <p>You must be an admin to add faculty.</p>
+              </div>
+            ) : (
                 <>
                   {/* If admin, show the form only when showForm is true. Toggle via top-right button. */}
                   {showForm ? (
@@ -399,9 +460,70 @@ const FacultyByDepartment = ({ role, programId }) => {
                     ) : (
                       <div className="text-gray-600">Click <span className="text-blue-600 font-medium">Add Faculty</span> at the top-right to open the form.</div>
                     )}
-                  </>
-                )}
-              </div>
+                  {/* Faculty list */}
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-3 text-gray-800">Faculty List</h3>
+                    {facultyList.length === 0 ? (
+                      <div className="text-sm text-gray-500">No faculty records found.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse border border-gray-300">
+                          <thead>
+                            <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">S.No</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Name of the Faculty</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">PAN No.</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">APAAR / AADHAAR Linked Faculty ID</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Highest Degree</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">University Name</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Area of Specialization</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Date of Joining</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Designation at Joining</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Present Designation</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Date designated as Prof</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Date of Receiving highest degree</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Nature of Association</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Working Currently</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Date of Leaving</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Nature of Separation</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Experience (in years)</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Is HoD / Principal</th>
+                              <th className="px-3 py-3 border border-gray-300 font-semibold">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white">
+                            {facultyList.map((row, index) => (
+                              <tr key={row.id} className="hover:bg-blue-50 transition-colors">
+                                <td className="px-3 py-2 border border-gray-300 text-center">{index + 1}</td>
+                                <td className="px-3 py-2 border border-gray-300 whitespace-nowrap">{row.faculty_name || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.pan_no || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.apaar_faculty_id || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.highest_degree || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.university_name || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.area_of_specialization || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString('en-GB') : '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.designation_at_joining || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.present_designation || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString('en-GB') : '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString('en-GB') : '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.nature_of_association || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 text-center">{row.working_presently || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString('en-GB') : '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300">{row.nature_of_separation || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 text-center">{row.experience_years || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 text-center">{row.is_hod_principal || '-'}</td>
+                                <td className="px-3 py-2 border border-gray-300 text-center whitespace-nowrap">
+                                  <button type="button" onClick={() => handleEdit(row)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">Edit</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </main>
