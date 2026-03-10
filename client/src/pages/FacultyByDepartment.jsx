@@ -58,6 +58,13 @@ const normalizeHeaderKey = (value) =>
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_]/g, "");
 
+const designationRowOrder = [
+  "Professor",
+  "Associate Professor",
+  "Assistant Professor",
+  "Number of Ph.D",
+];
+
 const FacultyByDepartment = ({ programId }) => {
   // Get current user / admin helper from the auth store
   const { isAdmin } = useAuthStore();
@@ -81,6 +88,9 @@ const FacultyByDepartment = ({ programId }) => {
   });
 
   const [facultyList, setFacultyList] = useState([]);
+  const [designationStats, setDesignationStats] = useState(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [editId, setEditId] = useState(null);
   const [bulkFile, setBulkFile] = useState(null);
@@ -106,6 +116,11 @@ const FacultyByDepartment = ({ programId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProgramId]);
 
+  useEffect(() => {
+    fetchDesignationStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProgramId, selectedAcademicYear]);
+
   const fetchFaculty = async () => {
     try {
       const resp = await axios.get("http://localhost:5000/api/faculty", {
@@ -117,6 +132,39 @@ const FacultyByDepartment = ({ programId }) => {
       }
     } catch (err) {
       console.error("Error fetching faculty:", err);
+    }
+  };
+
+  const fetchDesignationStats = async () => {
+    if (!selectedProgramId || !selectedAcademicYear) {
+      setDesignationStats(null);
+      setStatsError("");
+      return;
+    }
+
+    try {
+      setIsStatsLoading(true);
+      setStatsError("");
+
+      const resp = await axios.get("http://localhost:5000/api/faculty/stats/designation", {
+        params: {
+          program_id: selectedProgramId,
+          academicYear: selectedAcademicYear,
+        },
+        withCredentials: true,
+      });
+
+      if (resp.data?.success) {
+        setDesignationStats(resp.data.data || null);
+      } else {
+        setDesignationStats(null);
+      }
+    } catch (err) {
+      console.error("Error fetching designation stats:", err);
+      setDesignationStats(null);
+      setStatsError(err?.response?.data?.error || "Failed to load designation summary");
+    } finally {
+      setIsStatsLoading(false);
     }
   };
 
@@ -932,6 +980,75 @@ const FacultyByDepartment = ({ programId }) => {
                       </div>
                       </>
                     )}
+                </div>
+
+                {/* AY designation summary table below faculty table */}
+                <div className="w-full mt-8">
+                  <h3 className="text-base font-semibold text-gray-800 mb-2">Number of faculty in the department for both UG and PG</h3>
+
+                  {!selectedProgramId || !selectedAcademicYear ? (
+                    <div className="text-sm text-gray-500">Select program and academic year to view CAY summary.</div>
+                  ) : isStatsLoading ? (
+                    <div className="text-sm text-gray-500">Loading designation summary...</div>
+                  ) : statsError ? (
+                    <div className="text-sm text-red-600">{statsError}</div>
+                  ) : (
+                    <>
+                      <div className="md:hidden space-y-3">
+                        {designationRowOrder.map((designation) => {
+                          const row = designationStats?.rows?.find((item) => item.designation === designation);
+                          return (
+                            <div key={designation} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                              <p className="text-sm font-semibold text-gray-800">{designation}</p>
+                              <div className="mt-2 text-xs text-gray-700 space-y-1">
+                                <p><span className="font-medium">CAY:</span> {row?.CAY?.display || "0(R) + 0(C)"}</p>
+                                <p><span className="font-medium">CAYm1:</span> {row?.CAYm1?.display || "0(R) + 0(C)"}</p>
+                                <p><span className="font-medium">CAYm2:</span> {row?.CAYm2?.display || "0(R) + 0(C)"}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
+                          <thead>
+                            <tr className="bg-amber-100 text-gray-900">
+                              <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Designation</th>
+                              <th colSpan={3} className="px-3 py-3 border border-gray-300 font-semibold text-center">Number of faculty in the department for both UG and PG</th>
+                            </tr>
+                            <tr className="bg-amber-100 text-gray-900">
+                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
+                                CAY
+                                <div className="text-[11px] font-medium">{designationStats?.labels?.CAY || "-"}</div>
+                              </th>
+                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
+                                CAYm1
+                                <div className="text-[11px] font-medium">{designationStats?.labels?.CAYm1 || "-"}</div>
+                              </th>
+                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
+                                CAYm2
+                                <div className="text-[11px] font-medium">{designationStats?.labels?.CAYm2 || "-"}</div>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white">
+                            {designationRowOrder.map((designation) => {
+                              const row = designationStats?.rows?.find((item) => item.designation === designation);
+                              return (
+                                <tr key={designation} className="hover:bg-gray-50">
+                                  <td className="px-3 py-3 border border-gray-300 font-semibold">{designation}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAY?.display || "0(R) + 0(C)"}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm1?.display || "0(R) + 0(C)"}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm2?.display || "0(R) + 0(C)"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </div>
             </div>
           </div>
