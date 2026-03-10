@@ -126,6 +126,95 @@ const buildInsertParams = ({
   normalizeYesNoOrNull(is_hod_principal),
 ];
 
+const academicYearPattern = /^\d{4}-\d{2}$/;
+
+const parseAcademicYear = (academicYear) => {
+  if (!academicYear || !academicYearPattern.test(academicYear)) {
+    return null;
+  }
+
+  const startYear = Number.parseInt(academicYear.slice(0, 4), 10);
+  const endYearTwoDigits = Number.parseInt(academicYear.slice(5, 7), 10);
+
+  if ((startYear + 1) % 100 !== endYearTwoDigits) {
+    return null;
+  }
+
+  return {
+    label: academicYear,
+    startYear,
+  };
+};
+
+const formatAcademicYear = (startYear) => `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+
+const buildAcademicWindow = (startYear) => ({
+  label: formatAcademicYear(startYear),
+  windowStart: `${startYear}-08-31`,
+  windowEnd: `${startYear + 1}-04-25`,
+});
+
+const normalizeAssociationBucket = (value) => {
+  const text = toTrimmedOrNull(value);
+  return text && text.toLowerCase() === "contract" ? "contract" : "regular";
+};
+
+const isProfessorDesignation = (designation) => {
+  const text = toTrimmedOrNull(designation)?.toLowerCase() || "";
+  return text.includes("professor") && !text.includes("associate") && !text.includes("assistant");
+};
+
+const isAssociateDesignation = (designation) => {
+  const text = toTrimmedOrNull(designation)?.toLowerCase() || "";
+  return text.includes("associate") && text.includes("professor");
+};
+
+const isAssistantDesignation = (designation) => {
+  const text = toTrimmedOrNull(designation)?.toLowerCase() || "";
+  return text.includes("assistant") && text.includes("professor");
+};
+
+const isPhdDegree = (degree) => {
+  const text = toTrimmedOrNull(degree)?.toLowerCase() || "";
+  return /ph\s*\.?\s*d/.test(text);
+};
+
+const resolveDesignationBucket = (designation) => {
+  if (isProfessorDesignation(designation)) return "Professor";
+  if (isAssociateDesignation(designation)) return "Associate Professor";
+  if (isAssistantDesignation(designation)) return "Assistant Professor";
+  return null;
+};
+
+const resolveDesignationBucketForWindow = (facultyRow, windowStart) => {
+  const presentBucket = resolveDesignationBucket(facultyRow.present_designation);
+  if (presentBucket !== "Professor") {
+    return presentBucket;
+  }
+
+  const profDesignationDate = toDateOrNull(facultyRow.date_designated_as_prof);
+  if (profDesignationDate && profDesignationDate > windowStart) {
+    // Promotions after Aug 31 are deferred to next AY and counted in prior bucket.
+    return resolveDesignationBucket(facultyRow.designation_at_joining);
+  }
+
+  return "Professor";
+};
+
+const initializeStatsRows = () => ({
+  Professor: { regular: 0, contract: 0 },
+  "Associate Professor": { regular: 0, contract: 0 },
+  "Assistant Professor": { regular: 0, contract: 0 },
+  "Number of Ph.D": { regular: 0, contract: 0 },
+});
+
+const toDisplayCell = ({ regular, contract }) => ({
+  regular,
+  contract,
+  total: regular + contract,
+  display: `${regular}(R) + ${contract}(C)`,
+});
+
 /**
  * Add a faculty record to faculty_details
  */
@@ -459,9 +548,87 @@ const getFaculty = async (req, res) => {
   }
 };
 
-module.exports = {
-  addFaculty,
-  getFaculty,
+/**
+ * Get designation-wise faculty counts for CAY/CAYm1/CAYm2 using AY window rules.
+ */
+const getFacultyDesignationStats = async (req, res) => {
+  const { program_id, academicYear } = req.query;
+
+  if (!program_id) {
+    return res.status(400).json({ success: false, error: "program_id is required" });
+  }
+
+  const parsedAcademicYear = parseAcademicYear(academicYear);
+  if (!parsedAcademicYear) {
+    return res.status(400).json({ success: false, error: "academicYear must be in YYYY-YY format" });
+  }
+
+  try {
+    const resolved = await resolveProgramId(program_id);
+    if (!resolved.ok) {
+      return res.status(400).json({ success: false, error: resolved.error });
+    }
+
+    const windows = [
+      { key: "CAY", ...buildAcademicWindow(parsedAcademicYear.startYear) },
+      { key: "CAYm1", ...buildAcademicWindow(parsedAcademicYear.startYear - 1) },
+      { key: "CAYm2", ...buildAcademicWindow(parsedAcademicYear.startYear - 2) },
+    ];
+
+    const statsByWindowKey = {
+      CAY: initializeStatsRows(),
+      CAYm1: initializeStatsRows(),
+      CAYm2: initializeStatsRows(),
+    };
+
+    for (const window of windows) {
+      const [rows] = await pool.execute(
+        `SELECT present_designation, designation_at_joining, date_designated_as_prof, highest_degree, nature_of_association
+         FROM faculty_details
+         WHERE program_id = ?
+           AND date_of_joining IS NOT NULL
+           AND date_of_joining <= ?
+           AND (date_of_leaving IS NULL OR date_of_leaving > ?)`,
+        [resolved.id, window.windowStart, window.windowEnd],
+      );
+
+      for (const row of rows) {
+        const associationBucket = normalizeAssociationBucket(row.nature_of_association);
+        const designationBucket = resolveDesignationBucketForWindow(row, window.windowStart);
+
+        if (designationBucket) {
+          statsByWindowKey[window.key][designationBucket][associationBucket] += 1;
+        }
+
+        if (isPhdDegree(row.highest_degree)) {
+          statsByWindowKey[window.key]["Number of Ph.D"][associationBucket] += 1;
+        }
+      }
+    }
+
+    const rowOrder = ["Professor", "Associate Professor", "Assistant Professor", "Number of Ph.D"];
+    const rows = rowOrder.map((designation) => ({
+      designation,
+      CAY: toDisplayCell(statsByWindowKey.CAY[designation]),
+      CAYm1: toDisplayCell(statsByWindowKey.CAYm1[designation]),
+      CAYm2: toDisplayCell(statsByWindowKey.CAYm2[designation]),
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        labels: {
+          CAY: windows[0].label,
+          CAYm1: windows[1].label,
+          CAYm2: windows[2].label,
+        },
+        rows,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching faculty designation stats:", error);
+    return res.status(500).json({ success: false, error: "Database error" });
+  }
 };
 
 /**
@@ -558,6 +725,7 @@ module.exports = {
   addFaculty,
   bulkAddFaculty,
   getFaculty,
+  getFacultyDesignationStats,
   updateFaculty,
 };
 

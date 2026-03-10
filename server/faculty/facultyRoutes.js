@@ -1,6 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const { addFaculty, bulkAddFaculty, getFaculty, updateFaculty } = require("./facultyController");
+const {
+	addFaculty,
+	bulkAddFaculty,
+	getFaculty,
+	getFacultyDesignationStats,
+	updateFaculty,
+} = require("./facultyController");
 const { authenticateToken, authorizeRoles } = require("../auth/authController");
 
 // POST /api/faculty/add
@@ -11,6 +17,9 @@ router.post("/bulk-add", authenticateToken, authorizeRoles("admin"), bulkAddFacu
 
 // GET /api/faculty?program_id=...
 router.get("/", getFaculty);
+
+// GET /api/faculty/stats/designation?program_id=...&academicYear=YYYY-YY
+router.get("/stats/designation", getFacultyDesignationStats);
 
 // PUT /api/faculty/:id - update existing faculty
 router.put("/:id", authenticateToken, authorizeRoles("admin"), updateFaculty);

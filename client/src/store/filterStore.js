@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 const currentYear = new Date().getFullYear();
 
 const defaultAcademicYears = [
+  `${currentYear - 2}-${String(currentYear - 1).slice(-2)}`,
   `${currentYear - 1}-${String(currentYear).slice(-2)}`,
   `${currentYear}-${String(currentYear + 1).slice(-2)}`,
   `${currentYear + 1}-${String(currentYear + 2).slice(-2)}`,
