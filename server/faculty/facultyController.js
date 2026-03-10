@@ -598,10 +598,10 @@ const getFacultyDesignationStats = async (req, res) => {
 
         if (designationBucket) {
           statsByWindowKey[window.key][designationBucket][associationBucket] += 1;
-        }
-
-        if (isPhdDegree(row.highest_degree)) {
-          statsByWindowKey[window.key]["Number of Ph.D"][associationBucket] += 1;
+          if (isPhdDegree(row.highest_degree)) {
+            // Keep Ph.D count consistent with designation-eligible faculty for the AY window.
+            statsByWindowKey[window.key]["Number of Ph.D"][associationBucket] += 1;
+          }
         }
       }
     }
