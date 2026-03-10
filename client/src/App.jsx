@@ -17,6 +17,7 @@ import RatioByAllied from "./pages/RatioByAllied";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
 import useAuthStore from "./store/authStore";
+import Criteria1 from "./pages/criteria1";
 import "./App.css";
 
 function App() {
@@ -104,6 +105,14 @@ function App() {
           element={
             <ProtectedRoute>
               <RatioByAllied />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/criteria1"
+          element={
+            <ProtectedRoute>
+              <Criteria1/>
             </ProtectedRoute>
           }
         />

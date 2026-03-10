@@ -51,6 +51,13 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
     </svg>
   ),
+  criteria: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <path d="M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  ),
 };
 
 const Navbar = () => {
@@ -86,6 +93,12 @@ const Navbar = () => {
       items: [
         { name: "Faculty Student Ratio by Dept.", path: "/ratio-department", icon: Icons.chart },
         { name: "Faculty Student Ratio by Allied", path: "/ratio-allied", icon: Icons.ratio },
+      ],
+    },
+    {
+      section: "Criterias",
+      items: [
+        { name: "Criteria 1", path: "/criteria1", icon: Icons.criteria },
       ],
     },
   ];
@@ -149,10 +162,9 @@ const Navbar = () => {
                       className={`
                         flex items-center gap-3 px-5 py-2.5 text-[14px] font-medium
                         transition-all duration-200 border-r-[3px]
-                        ${
-                          isActive(item.path)
-                            ? "bg-blue-50 text-blue-600 border-blue-600"
-                            : "text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900"
+                        ${isActive(item.path)
+                          ? "bg-blue-50 text-blue-600 border-blue-600"
+                          : "text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900"
                         }
                       `}
                     >
