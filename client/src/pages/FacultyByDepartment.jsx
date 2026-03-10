@@ -101,7 +101,7 @@ const FacultyByDepartment = ({ programId }) => {
   // Control showing the add form (hidden by default)
   const [showForm, setShowForm] = useState(false);
 
-  const { selectedProgramId, programs, selectedAcademicYear } = useFilterStore();
+  const { selectedProgramId, programs, selectedAcademicYear, setSelectedProgram } = useFilterStore();
 
   // Pre-fill program_id from global top-bar selection when available
   useEffect(() => {
@@ -197,12 +197,20 @@ const FacultyByDepartment = ({ programId }) => {
         ...formData
       };
 
+      const submittedProgramId = String(payload.program_id || "");
+      const submittedProgram = programs.find((p) => String(p.id) === submittedProgramId);
+
       if (editMode && editId) {
         await axios.put(`http://localhost:5000/api/faculty/${editId}`, payload, { withCredentials: true });
         alert("Faculty updated successfully");
       } else {
         await axios.post("http://localhost:5000/api/faculty/add", payload, { withCredentials: true });
         alert("Faculty added successfully");
+      }
+
+      // Keep list filter aligned with submitted program so newly saved rows are visible.
+      if (submittedProgramId) {
+        setSelectedProgram(submittedProgramId, submittedProgram?.coursename || "");
       }
 
       // Refresh list

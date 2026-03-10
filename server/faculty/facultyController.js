@@ -31,8 +31,20 @@ const normalizeYesNoOrNull = (value) => {
   const text = toTrimmedOrNull(value);
   if (!text) return null;
   const lowered = text.toLowerCase();
-  if (lowered === "yes" || lowered === "y" || lowered === "true" || lowered === "1") return "Yes";
-  if (lowered === "no" || lowered === "n" || lowered === "false" || lowered === "0") return "No";
+  if (
+    lowered === "yes" ||
+    lowered === "y" ||
+    lowered === "true" ||
+    lowered === "1"
+  )
+    return "Yes";
+  if (
+    lowered === "no" ||
+    lowered === "n" ||
+    lowered === "false" ||
+    lowered === "0"
+  )
+    return "No";
   return null;
 };
 
@@ -66,7 +78,7 @@ const resolveProgramId = async (programId) => {
 
   const [direct] = await pool.execute(
     "SELECT id FROM programname_level_discipline WHERE id = ?",
-    [provided]
+    [provided],
   );
 
   if (direct.length > 0) {
@@ -75,7 +87,7 @@ const resolveProgramId = async (programId) => {
 
   const [byName] = await pool.execute(
     "SELECT id FROM programname_level_discipline WHERE name = ? LIMIT 1",
-    [provided]
+    [provided],
   );
 
   if (byName.length > 0) {
@@ -84,7 +96,8 @@ const resolveProgramId = async (programId) => {
 
   return {
     ok: false,
-    error: "program_id does not correspond to a valid program offering (programname_level_discipline)",
+    error:
+      "program_id does not correspond to a valid program offering (programname_level_discipline)",
   };
 };
 
@@ -146,7 +159,8 @@ const parseAcademicYear = (academicYear) => {
   };
 };
 
-const formatAcademicYear = (startYear) => `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+const formatAcademicYear = (startYear) =>
+  `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 
 const buildAcademicWindow = (startYear) => ({
   label: formatAcademicYear(startYear),
@@ -161,7 +175,11 @@ const normalizeAssociationBucket = (value) => {
 
 const isProfessorDesignation = (designation) => {
   const text = toTrimmedOrNull(designation)?.toLowerCase() || "";
-  return text.includes("professor") && !text.includes("associate") && !text.includes("assistant");
+  return (
+    text.includes("professor") &&
+    !text.includes("associate") &&
+    !text.includes("assistant")
+  );
 };
 
 const isAssociateDesignation = (designation) => {
@@ -187,7 +205,9 @@ const resolveDesignationBucket = (designation) => {
 };
 
 const resolveDesignationBucketForWindow = (facultyRow, windowStart) => {
-  const presentBucket = resolveDesignationBucket(facultyRow.present_designation);
+  const presentBucket = resolveDesignationBucket(
+    facultyRow.present_designation,
+  );
   if (presentBucket !== "Professor") {
     return presentBucket;
   }
@@ -232,7 +252,7 @@ const addFaculty = async (req, res) => {
     present_designation,
     date_designated_as_prof,
     date_of_receiving_highest_degree,
-    nature_of_association = 'Regular',
+    nature_of_association = "Regular",
     working_presently,
     date_of_leaving,
     experience_years,
@@ -240,7 +260,12 @@ const addFaculty = async (req, res) => {
   } = req.body;
 
   if (!program_id || !faculty_name) {
-    return res.status(400).json({ success: false, error: "program_id and faculty_name are required" });
+    return res
+      .status(400)
+      .json({
+        success: false,
+        error: "program_id and faculty_name are required",
+      });
   }
 
   try {
@@ -301,12 +326,15 @@ const bulkAddFaculty = async (req, res) => {
       FROM all_program ap
       INNER JOIN program_name pn ON ap.programname = pn.id
       INNER JOIN programname_level_discipline pld
-        ON pld.name = ap.programname AND pld.level = ap.level AND pld.discipline = ap.discipline`
+        ON pld.name = ap.programname AND pld.level = ap.level AND pld.discipline = ap.discipline`,
     );
 
     const programLookup = new Map();
     for (const row of programRows) {
-      const key = normalizeProgramLookupKey(row.departmentName, row.programName);
+      const key = normalizeProgramLookupKey(
+        row.departmentName,
+        row.programName,
+      );
       if (!key) continue;
       if (!programLookup.has(key)) {
         programLookup.set(key, new Set());
@@ -316,12 +344,15 @@ const bulkAddFaculty = async (req, res) => {
 
     const candidateProgramIds = new Set();
     const rowContexts = rows.map((rawRow, index) => {
-      const rowNumber = Number(rawRow?.row_number || rawRow?.__rowNumber || index + 2);
+      const rowNumber = Number(
+        rawRow?.row_number || rawRow?.__rowNumber || index + 2,
+      );
       const departmentName = toTrimmedOrNull(rawRow?.department_name);
       const programName = toTrimmedOrNull(rawRow?.program_name);
       const facultyName = toTrimmedOrNull(rawRow?.faculty_name);
       const key = normalizeProgramLookupKey(departmentName, programName);
-      const programCandidates = key && programLookup.has(key) ? Array.from(programLookup.get(key)) : [];
+      const programCandidates =
+        key && programLookup.has(key) ? Array.from(programLookup.get(key)) : [];
       if (programCandidates.length === 1) {
         candidateProgramIds.add(programCandidates[0]);
       }
@@ -343,7 +374,7 @@ const bulkAddFaculty = async (req, res) => {
       const placeholders = ids.map(() => "?").join(",");
       const [existingRows] = await pool.query(
         `SELECT program_id, faculty_name FROM faculty_details WHERE program_id IN (${placeholders})`,
-        ids
+        ids,
       );
 
       for (const existing of existingRows) {
@@ -362,15 +393,23 @@ const bulkAddFaculty = async (req, res) => {
     let invalidCount = 0;
 
     for (const context of rowContexts) {
-      const { rawRow, rowNumber, departmentName, programName, facultyName, programCandidates } = context;
+      const {
+        rawRow,
+        rowNumber,
+        departmentName,
+        programName,
+        facultyName,
+        programCandidates,
+      } = context;
 
       if (!departmentName || !programName || !facultyName) {
         invalidCount += 1;
-        const errorMsg = "department_name, program_name, and faculty_name are required";
+        const errorMsg =
+          "department_name, program_name, and faculty_name are required";
         console.log(`[Row ${rowNumber}] INVALID: ${errorMsg}`, {
           department_name: departmentName,
           program_name: programName,
-          faculty_name: facultyName
+          faculty_name: facultyName,
         });
         issues.push({
           rowNumber,
@@ -396,7 +435,7 @@ const bulkAddFaculty = async (req, res) => {
         invalidCount += 1;
         const errorMsg = `Ambiguous mapping for department '${departmentName}' and program '${programName}'. Please use a unique program combination.`;
         console.log(`[Row ${rowNumber}] INVALID: ${errorMsg}`, {
-          candidateProgramIds: programCandidates
+          candidateProgramIds: programCandidates,
         });
         issues.push({
           rowNumber,
@@ -414,7 +453,7 @@ const bulkAddFaculty = async (req, res) => {
         const errorMsg = `Faculty '${facultyName}' already exists for the selected program`;
         console.log(`[Row ${rowNumber}] DUPLICATE: ${errorMsg}`, {
           program_id: resolvedProgramId,
-          faculty_name: facultyName
+          faculty_name: facultyName,
         });
         issues.push({
           rowNumber,
@@ -437,7 +476,8 @@ const bulkAddFaculty = async (req, res) => {
           designation_at_joining: rawRow?.designation_at_joining,
           present_designation: rawRow?.present_designation,
           date_designated_as_prof: rawRow?.date_designated_as_prof,
-          date_of_receiving_highest_degree: rawRow?.date_of_receiving_highest_degree,
+          date_of_receiving_highest_degree:
+            rawRow?.date_of_receiving_highest_degree,
           nature_of_association: rawRow?.nature_of_association,
           working_presently: rawRow?.working_presently,
           date_of_leaving: rawRow?.date_of_leaving,
@@ -455,7 +495,7 @@ const bulkAddFaculty = async (req, res) => {
         console.log(`[Row ${rowNumber}] INSERT ERROR: ${errorMsg}`, {
           faculty_name: facultyName,
           program_id: resolvedProgramId,
-          error: insertError
+          error: insertError,
         });
         issues.push({
           rowNumber,
@@ -491,7 +531,7 @@ const bulkAddFaculty = async (req, res) => {
  */
 const getFaculty = async (req, res) => {
   const { program_id } = req.query;
-
+  console.log("Program ID", program_id);
   try {
     // Join with programname_level_discipline and program_name so we can return
     // the program_name id (pld.name) together with the faculty record. This
@@ -506,22 +546,28 @@ const getFaculty = async (req, res) => {
       // Resolve provided program_id (could be pld.id or program_name.id)
       let resolvedProgramId = null;
       // Check direct match to pld.id
-      const [direct] = await pool.execute(
-        "SELECT id FROM programname_level_discipline WHERE id = ?",
-        [program_id]
+      // const [direct] = await pool.execute(
+      //   "SELECT id FROM programname_level_discipline WHERE id = ?",
+      //   [program_id]
+      // );
+      // const direct = [];
+      // if (direct.length > 0) {
+      //   resolvedProgramId = direct[0].id;
+      // } else {
+      const [byName] = await pool.execute(
+        "SELECT id FROM programname_level_discipline WHERE name = ? LIMIT 1",
+        [program_id],
       );
-      if (direct.length > 0) {
-        resolvedProgramId = direct[0].id;
-      } else {
-        const [byName] = await pool.execute(
-          "SELECT id FROM programname_level_discipline WHERE name = ? LIMIT 1",
-          [program_id]
-        );
-        if (byName.length > 0) resolvedProgramId = byName[0].id;
-      }
-
+      if (byName.length > 0) resolvedProgramId = byName[0].id;
+      // }
+      console.log(resolvedProgramId);
       if (!resolvedProgramId) {
-        return res.status(400).json({ success: false, error: "program_id does not correspond to any program offering" });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "program_id does not correspond to any program offering",
+          });
       }
 
       // Filter by the resolved pld.id
@@ -539,7 +585,7 @@ const getFaculty = async (req, res) => {
       END,
       CASE WHEN f.experience_years IS NULL THEN 1 ELSE 0 END,
       f.experience_years DESC`;
-
+    console.log(sql);
     const [rows] = await pool.query(sql, params);
     return res.json({ success: true, data: rows });
   } catch (error) {
@@ -555,12 +601,19 @@ const getFacultyDesignationStats = async (req, res) => {
   const { program_id, academicYear } = req.query;
 
   if (!program_id) {
-    return res.status(400).json({ success: false, error: "program_id is required" });
+    return res
+      .status(400)
+      .json({ success: false, error: "program_id is required" });
   }
 
   const parsedAcademicYear = parseAcademicYear(academicYear);
   if (!parsedAcademicYear) {
-    return res.status(400).json({ success: false, error: "academicYear must be in YYYY-YY format" });
+    return res
+      .status(400)
+      .json({
+        success: false,
+        error: "academicYear must be in YYYY-YY format",
+      });
   }
 
   try {
@@ -571,8 +624,14 @@ const getFacultyDesignationStats = async (req, res) => {
 
     const windows = [
       { key: "CAY", ...buildAcademicWindow(parsedAcademicYear.startYear) },
-      { key: "CAYm1", ...buildAcademicWindow(parsedAcademicYear.startYear - 1) },
-      { key: "CAYm2", ...buildAcademicWindow(parsedAcademicYear.startYear - 2) },
+      {
+        key: "CAYm1",
+        ...buildAcademicWindow(parsedAcademicYear.startYear - 1),
+      },
+      {
+        key: "CAYm2",
+        ...buildAcademicWindow(parsedAcademicYear.startYear - 2),
+      },
     ];
 
     const statsByWindowKey = {
@@ -593,20 +652,32 @@ const getFacultyDesignationStats = async (req, res) => {
       );
 
       for (const row of rows) {
-        const associationBucket = normalizeAssociationBucket(row.nature_of_association);
-        const designationBucket = resolveDesignationBucketForWindow(row, window.windowStart);
+        const associationBucket = normalizeAssociationBucket(
+          row.nature_of_association,
+        );
+        const designationBucket = resolveDesignationBucketForWindow(
+          row,
+          window.windowStart,
+        );
 
         if (designationBucket) {
-          statsByWindowKey[window.key][designationBucket][associationBucket] += 1;
+          statsByWindowKey[window.key][designationBucket][associationBucket] +=
+            1;
           if (isPhdDegree(row.highest_degree)) {
             // Keep Ph.D count consistent with designation-eligible faculty for the AY window.
-            statsByWindowKey[window.key]["Number of Ph.D"][associationBucket] += 1;
+            statsByWindowKey[window.key]["Number of Ph.D"][associationBucket] +=
+              1;
           }
         }
       }
     }
 
-    const rowOrder = ["Professor", "Associate Professor", "Assistant Professor", "Number of Ph.D"];
+    const rowOrder = [
+      "Professor",
+      "Associate Professor",
+      "Assistant Professor",
+      "Number of Ph.D",
+    ];
     const rows = rowOrder.map((designation) => ({
       designation,
       CAY: toDisplayCell(statsByWindowKey.CAY[designation]),
@@ -649,7 +720,7 @@ const updateFaculty = async (req, res) => {
     present_designation,
     date_designated_as_prof,
     date_of_receiving_highest_degree,
-    nature_of_association = 'Regular',
+    nature_of_association = "Regular",
     working_presently,
     date_of_leaving,
     experience_years,
@@ -657,7 +728,9 @@ const updateFaculty = async (req, res) => {
   } = req.body;
 
   if (!id) {
-    return res.status(400).json({ success: false, error: "Missing faculty id" });
+    return res
+      .status(400)
+      .json({ success: false, error: "Missing faculty id" });
   }
 
   try {
@@ -711,7 +784,9 @@ const updateFaculty = async (req, res) => {
     const [result] = await pool.query(sql, params);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: "Faculty record not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Faculty record not found" });
     }
 
     return res.json({ success: true, message: "Faculty updated" });
@@ -728,4 +803,3 @@ module.exports = {
   getFacultyDesignationStats,
   updateFaculty,
 };
-
