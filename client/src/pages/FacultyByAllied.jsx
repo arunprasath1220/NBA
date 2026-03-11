@@ -179,14 +179,6 @@ const FacultyByAllied = () => {
     fetchData();
   }, [isAuthenticated, selectedAcademicYear]);
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   const selectedDepartment = useMemo(() => {
     if (selectedProgramLabel) return selectedProgramLabel;
     const match = programs.find((program) => String(program.id) === String(selectedProgramId));
@@ -211,13 +203,13 @@ const FacultyByAllied = () => {
       );
 
       if (belongsToGroup) {
-        groupDepartments.forEach((name) => unique.add(name));
+        groupDepartments.forEach((name) => {
+          if (normalizeText(name) !== selectedKey) {
+            unique.add(name);
+          }
+        });
       }
     });
-
-    if (unique.size === 0) {
-      unique.add(selectedDepartment);
-    }
 
     return Array.from(unique);
   }, [mappings, selectedDepartment]);
@@ -233,60 +225,172 @@ const FacultyByAllied = () => {
     return grouped;
   }, [alliedDepartmentNames, facultyRows]);
 
-  const renderCalculationTable = (statsData) => (
-    <div className="mt-3 hidden md:block w-full overflow-x-auto rounded-lg border border-gray-200">
-      <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
-        <thead>
-          <tr className="bg-amber-100 text-gray-900">
-            <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Designation</th>
-            <th colSpan={3} className="px-3 py-3 border border-gray-300 font-semibold text-center">Number of faculty in the department for both UG and PG</th>
-          </tr>
-          <tr className="bg-amber-100 text-gray-900">
-            <th className="px-3 py-2 border border-gray-300 font-semibold text-center">CAY<div className="text-[11px] font-medium">{statsData?.labels?.CAY || "-"}</div></th>
-            <th className="px-3 py-2 border border-gray-300 font-semibold text-center">CAYm1<div className="text-[11px] font-medium">{statsData?.labels?.CAYm1 || "-"}</div></th>
-            <th className="px-3 py-2 border border-gray-300 font-semibold text-center">CAYm2<div className="text-[11px] font-medium">{statsData?.labels?.CAYm2 || "-"}</div></th>
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          {designationRowOrder.map((designation) => {
-            const row = statsData?.rows?.find((item) => item.designation === designation);
-            return (
-              <tr key={designation} className="hover:bg-gray-50">
-                <td className="px-3 py-3 border border-gray-300 font-semibold">{designation}</td>
-                <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAY?.display || "0(R) + 0(C)"}</td>
-                <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm1?.display || "0(R) + 0(C)"}</td>
-                <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm2?.display || "0(R) + 0(C)"}</td>
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const renderFacultyRows = (rows, departmentName) => (
+    <>
+      <div className="md:hidden space-y-3">
+        {rows.map((row, index) => (
+          <div
+            key={`${departmentName}-${row.id}-${index}`}
+            className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-800 break-words">{row.faculty_name || "-"}</p>
+              <span className="text-xs text-gray-500">#{index + 1}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-700">
+              <p><span className="font-medium">Designation:</span> {row.present_designation || "-"}</p>
+              <p><span className="font-medium">Degree:</span> {row.highest_degree || "-"}</p>
+              <p><span className="font-medium">Working:</span> {row.working_presently || "-"}</p>
+              <p><span className="font-medium">Experience:</span> {row.experience_years || "-"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
+        <table className="min-w-[1600px] text-left text-[11px] sm:text-xs border-collapse border border-gray-300">
+          <thead>
+            <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">S.No</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Name of the Faculty</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">PAN No.</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">APAAR / AADHAAR Linked Faculty ID</th>
+              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Highest Degree</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">University Name</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Area of Specialization</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Joining</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Designation at Joining</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Present Designation</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date designated as Prof</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Receiving highest degree</th>
+              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Nature of Association</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Working Currently</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Leaving</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Experience (in years)</th>
+              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Is HoD / Principal</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {rows.map((row, index) => (
+              <tr key={`${departmentName}-${row.id}-${index}`} className="hover:bg-blue-50 transition-colors">
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{index + 1}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.faculty_name || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.pan_no || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.apaar_faculty_id || "-"}</td>
+                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.highest_degree || "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.university_name || "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.area_of_specialization || "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.designation_at_joining || "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300">{row.present_designation || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.nature_of_association || "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.working_presently || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.experience_years || "-"}</td>
+                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.is_hod_principal || "-"}</td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const renderCalculationTable = (statsData) => (
+    <div className="w-full mt-4">
+      <h5 className="text-sm font-semibold text-gray-700 mb-2">Number of faculty in the department for both UG and PG</h5>
+
+      {!selectedAcademicYear ? (
+        <div className="text-sm text-gray-500">Select academic year to view CAY summary.</div>
+      ) : !statsData ? (
+        <div className="text-sm text-gray-500">Unable to calculate summary for this department.</div>
+      ) : (
+        <>
+          <div className="md:hidden space-y-3">
+            {designationRowOrder.map((designation) => {
+              const row = statsData?.rows?.find((item) => item.designation === designation);
+              return (
+                <div key={designation} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                  <p className="text-sm font-semibold text-gray-800">{designation}</p>
+                  <div className="mt-2 text-xs text-gray-700 space-y-1">
+                    <p><span className="font-medium">CAY:</span> {row?.CAY?.display || "0(R) + 0(C)"}</p>
+                    <p><span className="font-medium">CAYm1:</span> {row?.CAYm1?.display || "0(R) + 0(C)"}</p>
+                    <p><span className="font-medium">CAYm2:</span> {row?.CAYm2?.display || "0(R) + 0(C)"}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-amber-100 text-gray-900">
+                  <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Designation</th>
+                  <th colSpan={3} className="px-3 py-3 border border-gray-300 font-semibold text-center">Number of faculty in the department for both UG and PG</th>
+                </tr>
+                <tr className="bg-amber-100 text-gray-900">
+                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center">CAY<div className="text-[11px] font-medium">{statsData?.labels?.CAY || "-"}</div></th>
+                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center">CAYm1<div className="text-[11px] font-medium">{statsData?.labels?.CAYm1 || "-"}</div></th>
+                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center">CAYm2<div className="text-[11px] font-medium">{statsData?.labels?.CAYm2 || "-"}</div></th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {designationRowOrder.map((designation) => {
+                  const row = statsData?.rows?.find((item) => item.designation === designation);
+                  return (
+                    <tr key={designation} className="hover:bg-gray-50">
+                      <td className="px-3 py-3 border border-gray-300 font-semibold">{designation}</td>
+                      <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAY?.display || "0(R) + 0(C)"}</td>
+                      <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm1?.display || "0(R) + 0(C)"}</td>
+                      <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm2?.display || "0(R) + 0(C)"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen overflow-x-hidden">
       <Navbar />
       <TopBar />
-      <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
-        <div className="p-6 pt-16 lg:pt-14">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-900">Faculty by Allied Dept.</h1>
+      <main className="flex-1 min-w-0 lg:ml-[240px] overflow-x-hidden">
+        <div className="p-6 pt-16 lg:pt-14 max-w-full">
+          <div className="w-full max-w-full">
+            <div className="mb-2 text-sm text-gray-600">
+              Academic Year: <span className="font-semibold text-gray-800">{selectedAcademicYear || "Not selected"}</span>
             </div>
 
             {loadingData ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-sm text-gray-600">Loading allied departments...</div>
+              <div className="text-sm text-gray-600">Loading allied departments...</div>
             ) : error ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-sm text-red-600">{error}</div>
+              <div className="text-sm text-red-600">{error}</div>
             ) : !selectedProgramId ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-sm text-gray-600">
+              <div className="text-sm text-gray-600">
                 Choose a department from the global Program filter to view all of its allied departments.
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="w-full">
+                <div className="flex justify-between items-center py-2 mb-2">
+                  <h3 className="text-base font-semibold text-gray-800">Faculty List</h3>
+                </div>
                 {alliedDepartmentNames.length === 0 ? (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-sm text-gray-500">
+                  <div className="text-sm text-gray-500">
                     No allied department mappings found for {selectedDepartment || "the selected department"}.
                   </div>
                 ) : (
@@ -294,49 +398,19 @@ const FacultyByAllied = () => {
                     const rows = groupedFaculty[departmentName] || [];
                     const stats = computeStats(rows, selectedAcademicYear);
                     return (
-                      <div key={departmentName} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                        <h3 className="text-base font-semibold text-gray-800 mb-2">{departmentName}</h3>
+                      <div key={departmentName} className="mt-4 first:mt-0">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">{departmentName}</h4>
                         {rows.length === 0 ? (
                           <div className="text-sm text-gray-500">No faculty records found for this department.</div>
                         ) : (
-                          <div className="overflow-x-auto rounded-lg border border-gray-200">
-                            <table className="min-w-[1200px] w-full text-left text-xs border-collapse border border-gray-300">
-                              <thead>
-                                <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-                                  <th className="px-2 py-2 border border-gray-300">S.No</th>
-                                  <th className="px-2 py-2 border border-gray-300">Faculty Name</th>
-                                  <th className="px-2 py-2 border border-gray-300">Highest Degree</th>
-                                  <th className="px-2 py-2 border border-gray-300">Present Designation</th>
-                                  <th className="px-2 py-2 border border-gray-300">Working</th>
-                                  <th className="px-2 py-2 border border-gray-300">Experience</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {rows.map((row, index) => (
-                                  <tr key={`${departmentName}-${row.id}-${index}`} className="hover:bg-blue-50">
-                                    <td className="px-2 py-2 border border-gray-300 text-center">{index + 1}</td>
-                                    <td className="px-2 py-2 border border-gray-300">{row.faculty_name || "-"}</td>
-                                    <td className="px-2 py-2 border border-gray-300">{row.highest_degree || "-"}</td>
-                                    <td className="px-2 py-2 border border-gray-300">{row.present_designation || "-"}</td>
-                                    <td className="px-2 py-2 border border-gray-300">{row.working_presently || "-"}</td>
-                                    <td className="px-2 py-2 border border-gray-300">{row.experience_years || "-"}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                          renderFacultyRows(rows, departmentName)
                         )}
-
-                        {!selectedAcademicYear ? (
-                          <div className="mt-3 text-sm text-gray-500">Select academic year to view calculation table.</div>
-                        ) : (
-                          renderCalculationTable(stats)
-                        )}
+                        {renderCalculationTable(stats)}
                       </div>
                     );
                   })
                 )}
-                </div>
+              </div>
             )}
           </div>
         </div>
