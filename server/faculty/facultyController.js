@@ -76,15 +76,6 @@ const resolveProgramId = async (programId) => {
     return { ok: false, error: "program_id is required" };
   }
 
-  const [direct] = await pool.execute(
-    "SELECT id FROM programname_level_discipline WHERE id = ?",
-    [provided],
-  );
-
-  if (direct.length > 0) {
-    return { ok: true, id: direct[0].id };
-  }
-
   const [byName] = await pool.execute(
     "SELECT id FROM programname_level_discipline WHERE name = ? LIMIT 1",
     [provided],
@@ -531,48 +522,35 @@ const bulkAddFaculty = async (req, res) => {
  */
 const getFaculty = async (req, res) => {
   const { program_id } = req.query;
-  console.log("Program ID", program_id);
+
   try {
     // Join with programname_level_discipline and program_name so we can return
     // the program_name id (pld.name) together with the faculty record. This
     // lets the frontend map back to the program_name selection when editing.
-    let sql = `SELECT f.*, pld.name AS program_name_id, pn.coursename AS program_coursename
+    let sql = `SELECT f.*, pld.name AS program_name_id, pn.coursename AS program_coursename,
+               (
+                 SELECT ap.department_name
+                 FROM all_program ap
+                 WHERE ap.programname = pld.name
+                   AND ap.level = pld.level
+                   AND ap.discipline = pld.discipline
+                 ORDER BY ap.id ASC
+                 LIMIT 1
+               ) AS department_name
                FROM faculty_details f
                LEFT JOIN programname_level_discipline pld ON f.program_id = pld.id
                LEFT JOIN program_name pn ON pld.name = pn.id`;
     const params = [];
 
     if (program_id) {
-      // Resolve provided program_id (could be pld.id or program_name.id)
-      let resolvedProgramId = null;
-      // Check direct match to pld.id
-      // const [direct] = await pool.execute(
-      //   "SELECT id FROM programname_level_discipline WHERE id = ?",
-      //   [program_id]
-      // );
-      // const direct = [];
-      // if (direct.length > 0) {
-      //   resolvedProgramId = direct[0].id;
-      // } else {
-      const [byName] = await pool.execute(
-        "SELECT id FROM programname_level_discipline WHERE name = ? LIMIT 1",
-        [program_id],
-      );
-      if (byName.length > 0) resolvedProgramId = byName[0].id;
-      // }
-      console.log(resolvedProgramId);
-      if (!resolvedProgramId) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "program_id does not correspond to any program offering",
-          });
+      const resolved = await resolveProgramId(program_id);
+      if (!resolved.ok) {
+        return res.status(400).json({ success: false, error: resolved.error });
       }
 
       // Filter by the resolved pld.id
       sql += " WHERE f.program_id = ?";
-      params.push(resolvedProgramId);
+      params.push(resolved.id);
     }
 
     sql += ` ORDER BY 
@@ -585,7 +563,6 @@ const getFaculty = async (req, res) => {
       END,
       CASE WHEN f.experience_years IS NULL THEN 1 ELSE 0 END,
       f.experience_years DESC`;
-    console.log(sql);
     const [rows] = await pool.query(sql, params);
     return res.json({ success: true, data: rows });
   } catch (error) {
