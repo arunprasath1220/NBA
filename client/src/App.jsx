@@ -9,7 +9,7 @@ import Login from "./pages/Login";
 import InstituteProfile from "./pages/InstituteProfile";
 import AllPrograms from "./pages/AllPrograms";
 import AlliedCourseMapping from "./pages/AlliedCourseMapping";
-import AlliedDepartment from "./pages/AlliedDepartment";
+import StudentsIntake from "./pages/StudentsIntake";
 import FacultyByDepartment from "./pages/FacultyByDepartment";
 import FacultyByAllied from "./pages/FacultyByAllied";
 import RatioByDepartment from "./pages/RatioByDepartment";
@@ -68,10 +68,10 @@ function App() {
           }
         />
         <Route
-          path="/allied-department"
+          path="/students-intake"
           element={
             <ProtectedRoute>
-              <AlliedDepartment />
+              <StudentsIntake />
             </ProtectedRoute>
           }
         />

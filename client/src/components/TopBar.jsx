@@ -14,7 +14,7 @@ const TopBar = () => {
       "/institute-profile": "Institute Profile",
       "/all-programs": "All Programs",
       "/allied-mapping": "Allied Course Mapping",
-      "/allied-department": "Allied Department",
+      "/students-intake": "Students Intake",
       "/faculty-department": "Faculty by Department",
       "/faculty-allied": "Faculty by Allied Dept.",
       "/ratio-department": "Faculty Student Ratio by Dept.",
