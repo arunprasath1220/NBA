@@ -65,6 +65,128 @@ const designationRowOrder = [
   "Number of Ph.D",
 ];
 
+const parseAcademicYearLabel = (label) => {
+  if (!label || !/^\d{4}-\d{2}$/.test(label)) return null;
+  const startYear = Number.parseInt(label.slice(0, 4), 10);
+  const endYearTwoDigits = Number.parseInt(label.slice(5, 7), 10);
+  if ((startYear + 1) % 100 !== endYearTwoDigits) return null;
+  return startYear;
+};
+
+const toDateOrNullValue = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const buildAcademicWindowLocal = (startYear) => {
+  const label = `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+  return {
+    label,
+    windowStart: new Date(`${startYear}-08-31T00:00:00`),
+    windowEnd: new Date(`${startYear + 1}-04-25T00:00:00`),
+  };
+};
+
+const isProfessorDesignationLocal = (designation) => {
+  const text = String(designation || "").toLowerCase();
+  return text.includes("professor") && !text.includes("associate") && !text.includes("assistant");
+};
+
+const isAssociateDesignationLocal = (designation) => {
+  const text = String(designation || "").toLowerCase();
+  return text.includes("associate") && text.includes("professor");
+};
+
+const isAssistantDesignationLocal = (designation) => {
+  const text = String(designation || "").toLowerCase();
+  return text.includes("assistant") && text.includes("professor");
+};
+
+const resolveDesignationBucketLocal = (designation) => {
+  if (isProfessorDesignationLocal(designation)) return "Professor";
+  if (isAssociateDesignationLocal(designation)) return "Associate Professor";
+  if (isAssistantDesignationLocal(designation)) return "Assistant Professor";
+  return null;
+};
+
+const isPhdDegreeLocal = (degree) => /ph\s*\.?\s*d/i.test(String(degree || ""));
+
+const toAssociationBucketLocal = (association) =>
+  String(association || "").trim().toLowerCase() === "contract" ? "contract" : "regular";
+
+const buildEmptyStatsRows = () => ({
+  Professor: { regular: 0, contract: 0 },
+  "Associate Professor": { regular: 0, contract: 0 },
+  "Assistant Professor": { regular: 0, contract: 0 },
+  "Number of Ph.D": { regular: 0, contract: 0 },
+});
+
+const toStatsCell = ({ regular, contract }) => ({
+  regular,
+  contract,
+  total: regular + contract,
+  display: `${regular}(R) + ${contract}(C)`,
+});
+
+const computeDesignationSummaryFromRows = (rows, academicYearLabel) => {
+  const startYear = parseAcademicYearLabel(academicYearLabel);
+  if (!startYear) return null;
+
+  const windows = [
+    { key: "CAY", ...buildAcademicWindowLocal(startYear) },
+    { key: "CAYm1", ...buildAcademicWindowLocal(startYear - 1) },
+    { key: "CAYm2", ...buildAcademicWindowLocal(startYear - 2) },
+  ];
+
+  const statsByWindow = {
+    CAY: buildEmptyStatsRows(),
+    CAYm1: buildEmptyStatsRows(),
+    CAYm2: buildEmptyStatsRows(),
+  };
+
+  for (const window of windows) {
+    for (const row of rows) {
+      const joiningDate = toDateOrNullValue(row.date_of_joining);
+      if (!joiningDate || joiningDate > window.windowStart) continue;
+
+      const leavingDate = toDateOrNullValue(row.date_of_leaving);
+      if (leavingDate && leavingDate <= window.windowEnd) continue;
+
+      let designationBucket = resolveDesignationBucketLocal(row.present_designation);
+      if (designationBucket === "Professor") {
+        const promotedAsProfDate = toDateOrNullValue(row.date_designated_as_prof);
+        if (promotedAsProfDate && promotedAsProfDate > window.windowStart) {
+          designationBucket = resolveDesignationBucketLocal(row.designation_at_joining);
+        }
+      }
+
+      if (!designationBucket) continue;
+
+      const associationBucket = toAssociationBucketLocal(row.nature_of_association);
+      statsByWindow[window.key][designationBucket][associationBucket] += 1;
+
+      if (isPhdDegreeLocal(row.highest_degree)) {
+        statsByWindow[window.key]["Number of Ph.D"][associationBucket] += 1;
+      }
+    }
+  }
+
+  return {
+    labels: {
+      CAY: windows[0].label,
+      CAYm1: windows[1].label,
+      CAYm2: windows[2].label,
+    },
+    rows: designationRowOrder.map((designation) => ({
+      designation,
+      CAY: toStatsCell(statsByWindow.CAY[designation]),
+      CAYm1: toStatsCell(statsByWindow.CAYm1[designation]),
+      CAYm2: toStatsCell(statsByWindow.CAYm2[designation]),
+    })),
+  };
+};
+
 const FacultyByDepartment = ({ programId }) => {
   // Get current user / admin helper from the auth store
   const { isAdmin } = useAuthStore();
@@ -103,28 +225,39 @@ const FacultyByDepartment = ({ programId }) => {
 
   const { selectedProgramId, programs, selectedAcademicYear, setSelectedProgram } = useFilterStore();
 
+  const selectedProgramRecord = programs.find(
+    (program) => String(program.id) === String(selectedProgramId),
+  );
+
+  // Faculty APIs expect the program_name id (pld.name) for resolution on this page.
+  const effectiveProgramIdentifier = selectedProgramRecord?.programNameId
+    ? String(selectedProgramRecord.programNameId)
+    : String(selectedProgramId || "");
+
   // Pre-fill program_id from global top-bar selection when available
   useEffect(() => {
-    if (selectedProgramId) {
-      setFormData((prev) => ({ ...prev, program_id: selectedProgramId }));
+    if (effectiveProgramIdentifier) {
+      setFormData((prev) => ({ ...prev, program_id: effectiveProgramIdentifier }));
     }
-  }, [selectedProgramId]);
+  }, [effectiveProgramIdentifier]);
 
   // Fetch faculty list whenever program selection changes or on mount
   useEffect(() => {
     fetchFaculty();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProgramId]);
+  }, [effectiveProgramIdentifier]);
 
   useEffect(() => {
     fetchDesignationStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProgramId, selectedAcademicYear]);
+  }, [effectiveProgramIdentifier, selectedAcademicYear]);
 
   const fetchFaculty = async () => {
     try {
       const resp = await axios.get("http://localhost:5000/api/faculty", {
-        params: selectedProgramId ? { program_id: selectedProgramId } : {},
+        params: effectiveProgramIdentifier
+          ? { program_id: effectiveProgramIdentifier }
+          : {},
         withCredentials: true,
       });
       if (resp.data && resp.data.success) {
@@ -136,7 +269,7 @@ const FacultyByDepartment = ({ programId }) => {
   };
 
   const fetchDesignationStats = async () => {
-    if (!selectedProgramId || !selectedAcademicYear) {
+    if (!effectiveProgramIdentifier || !selectedAcademicYear) {
       setDesignationStats(null);
       setStatsError("");
       return;
@@ -148,7 +281,7 @@ const FacultyByDepartment = ({ programId }) => {
 
       const resp = await axios.get("http://localhost:5000/api/faculty/stats/designation", {
         params: {
-          program_id: selectedProgramId,
+          program_id: effectiveProgramIdentifier,
           academicYear: selectedAcademicYear,
         },
         withCredentials: true,
@@ -198,7 +331,9 @@ const FacultyByDepartment = ({ programId }) => {
       };
 
       const submittedProgramId = String(payload.program_id || "");
-      const submittedProgram = programs.find((p) => String(p.id) === submittedProgramId);
+      const submittedProgram = programs.find(
+        (p) => String(p.programNameId ?? p.id) === submittedProgramId,
+      );
 
       if (editMode && editId) {
         await axios.put(`http://localhost:5000/api/faculty/${editId}`, payload, { withCredentials: true });
@@ -209,8 +344,8 @@ const FacultyByDepartment = ({ programId }) => {
       }
 
       // Keep list filter aligned with submitted program so newly saved rows are visible.
-      if (submittedProgramId) {
-        setSelectedProgram(submittedProgramId, submittedProgram?.coursename || "");
+      if (submittedProgram?.id) {
+        setSelectedProgram(String(submittedProgram.id), submittedProgram?.coursename || "");
       }
 
       // Refresh list
@@ -246,9 +381,9 @@ const FacultyByDepartment = ({ programId }) => {
   };
 
   const handleEdit = (row) => {
-    // Row contains program_id (pld.id) and program_name_id (program_name.id) from server
+    // Use program_name id (pld.name) while editing, which matches this form select values.
     setFormData({
-      program_id: row.program_name_id ? String(row.program_name_id) : String(row.program_id || ""),
+      program_id: String(row.program_name_id || ""),
       faculty_name: row.faculty_name || "",
       pan_no: row.pan_no || "",
       apaar_faculty_id: row.apaar_faculty_id || "",
@@ -396,6 +531,42 @@ const FacultyByDepartment = ({ programId }) => {
     }
   };
 
+  const mapFacultyRowsForExport = (rows) => rows.map((row, index) => ({
+    "S.No": index + 1,
+    "Faculty Name": row.faculty_name || "-",
+    "PAN No": row.pan_no || "-",
+    "APAAR ID": row.apaar_faculty_id || "-",
+    "Highest Degree": row.highest_degree || "-",
+    University: row.university_name || "-",
+    Specialization: row.area_of_specialization || "-",
+    "Date of Joining": row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString("en-GB") : "-",
+    "Designation at Joining": row.designation_at_joining || "-",
+    "Present Designation": row.present_designation || "-",
+    "Date as Professor": row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString("en-GB") : "-",
+    "Date of Highest Degree": row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString("en-GB") : "-",
+    "Nature of Association": row.nature_of_association || "-",
+    "Working Currently": row.working_presently || "-",
+    "Date of Leaving": row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString("en-GB") : "-",
+    "Experience (Years)": row.experience_years || "-",
+    "Is HoD/Principal": row.is_hod_principal || "-",
+  }));
+
+  const sheetNameSafe = (value, fallback, usedNames) => {
+    const base = String(value || fallback)
+      .replace(/[\\/?*\[\]:]/g, "")
+      .trim();
+    const shortBase = (base || fallback).slice(0, 28);
+    let name = shortBase;
+    let n = 1;
+    while (usedNames.has(name)) {
+      const suffix = `_${n}`;
+      name = `${shortBase.slice(0, 31 - suffix.length)}${suffix}`;
+      n += 1;
+    }
+    usedNames.add(name);
+    return name;
+  };
+
   // Export to Excel
   const exportToExcel = () => {
     if (facultyList.length === 0) {
@@ -403,50 +574,47 @@ const FacultyByDepartment = ({ programId }) => {
       return;
     }
 
-    const exportData = facultyList.map((row, index) => ({
-      "S.No": index + 1,
-      "Faculty Name": row.faculty_name || "-",
-      "PAN No": row.pan_no || "-",
-      "APAAR ID": row.apaar_faculty_id || "-",
-      "Highest Degree": row.highest_degree || "-",
-      "University": row.university_name || "-",
-      "Specialization": row.area_of_specialization || "-",
-      "Date of Joining": row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString('en-GB') : "-",
-      "Designation at Joining": row.designation_at_joining || "-",
-      "Present Designation": row.present_designation || "-",
-      "Date as Professor": row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString('en-GB') : "-",
-      "Date of Highest Degree": row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString('en-GB') : "-",
-      "Nature of Association": row.nature_of_association || "-",
-      "Working Currently": row.working_presently || "-",
-      "Date of Leaving": row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString('en-GB') : "-",
-      "Experience (Years)": row.experience_years || "-",
-      "Is HoD/Principal": row.is_hod_principal || "-",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Faculty Details");
+    const usedSheetNames = new Set();
+    const departmentEntries = isAllDepartmentsView
+      ? Object.entries(groupedFacultyByDepartment)
+      : [[selectedProgramRecord?.departmentName || selectedProgramRecord?.coursename || "Selected Program", facultyList]];
 
-    // Set column widths
-    worksheet["!cols"] = [
-      { wch: 8 },
-      { wch: 28 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 18 },
-      { wch: 24 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 22 },
-      { wch: 22 },
-      { wch: 18 },
-      { wch: 22 },
-      { wch: 22 },
-      { wch: 18 },
-      { wch: 16 },
-      { wch: 18 },
-      { wch: 18 },
-    ];
+    for (const [departmentName, rows] of departmentEntries) {
+      const facultySheetName = sheetNameSafe(`${departmentName}_Faculty`, "Faculty", usedSheetNames);
+      const facultyData = mapFacultyRowsForExport(rows);
+      const facultySheet = XLSX.utils.json_to_sheet(facultyData);
+      facultySheet["!cols"] = [
+        { wch: 8 }, { wch: 28 }, { wch: 16 }, { wch: 20 }, { wch: 18 },
+        { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 22 }, { wch: 22 },
+        { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 16 },
+        { wch: 18 }, { wch: 18 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, facultySheet, facultySheetName);
+
+      const summary = computeDesignationSummaryFromRows(rows, selectedAcademicYear);
+      const summarySheetName = sheetNameSafe(`${departmentName}_AY`, "AY_Summary", usedSheetNames);
+      if (summary) {
+        const summaryData = designationRowOrder.map((designation) => {
+          const row = summary.rows.find((item) => item.designation === designation);
+          return {
+            Designation: designation,
+            [`CAY (${summary.labels.CAY})`]: row?.CAY?.display || "0(R) + 0(C)",
+            [`CAYm1 (${summary.labels.CAYm1})`]: row?.CAYm1?.display || "0(R) + 0(C)",
+            [`CAYm2 (${summary.labels.CAYm2})`]: row?.CAYm2?.display || "0(R) + 0(C)",
+          };
+        });
+        const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+        summarySheet["!cols"] = [{ wch: 24 }, { wch: 22 }, { wch: 22 }, { wch: 22 }];
+        XLSX.utils.book_append_sheet(workbook, summarySheet, summarySheetName);
+      } else {
+        const noteSheet = XLSX.utils.aoa_to_sheet([
+          ["Number of faculty in the department for both UG and PG"],
+          ["Select academic year to include CAY/CAYm1/CAYm2 summary."],
+        ]);
+        XLSX.utils.book_append_sheet(workbook, noteSheet, summarySheetName);
+      }
+    }
 
     XLSX.writeFile(workbook, "Faculty_Details.xlsx");
   };
@@ -459,9 +627,9 @@ const FacultyByDepartment = ({ programId }) => {
     }
 
     const doc = new jsPDF("landscape");
-
-    doc.setFontSize(16);
-    doc.text("Faculty Details", 14, 15);
+    const departmentEntries = isAllDepartmentsView
+      ? Object.entries(groupedFacultyByDepartment)
+      : [[selectedProgramRecord?.departmentName || selectedProgramRecord?.coursename || "Selected Program", facultyList]];
 
     const tableHeaders = [
       "S.No",
@@ -480,41 +648,257 @@ const FacultyByDepartment = ({ programId }) => {
       "Currently Working",
       "Date of Leaving",
       "Experience",
-      "HoD/Principal"
+      "HoD/Principal",
     ];
 
-    const tableData = facultyList.map((row, index) => [
-      String(index + 1),
-      row.faculty_name || "-",
-      row.pan_no || "-",
-      row.apaar_faculty_id || "-",
-      row.highest_degree || "-",
-      row.university_name || "-",
-      row.area_of_specialization || "-",
-      row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString('en-GB') : "-",
-      row.designation_at_joining || "-",
-      row.present_designation || "-",
-      row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString('en-GB') : "-",
-      row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString('en-GB') : "-",
-      row.nature_of_association || "-",
-      row.working_presently || "-",
-      row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString('en-GB') : "-",
-      row.experience_years || "-",
-      row.is_hod_principal || "-",
-    ]);
+    let sectionY = 15;
+    departmentEntries.forEach(([departmentName, rows], sectionIndex) => {
+      if (sectionIndex > 0) {
+        doc.addPage();
+        sectionY = 15;
+      }
 
-    autoTable(doc, {
-      head: [tableHeaders],
-      body: tableData,
-      startY: 25,
-      styles: { fontSize: 7, cellPadding: 2 },
-      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [239, 246, 255] },
-      theme: "grid",
+      doc.setFontSize(14);
+      doc.text(`Department: ${departmentName}`, 14, sectionY);
+
+      const facultyBody = rows.map((row, index) => [
+        String(index + 1),
+        row.faculty_name || "-",
+        row.pan_no || "-",
+        row.apaar_faculty_id || "-",
+        row.highest_degree || "-",
+        row.university_name || "-",
+        row.area_of_specialization || "-",
+        row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString("en-GB") : "-",
+        row.designation_at_joining || "-",
+        row.present_designation || "-",
+        row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString("en-GB") : "-",
+        row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString("en-GB") : "-",
+        row.nature_of_association || "-",
+        row.working_presently || "-",
+        row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString("en-GB") : "-",
+        row.experience_years || "-",
+        row.is_hod_principal || "-",
+      ]);
+
+      autoTable(doc, {
+        head: [tableHeaders],
+        body: facultyBody,
+        startY: sectionY + 4,
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [239, 246, 255] },
+        theme: "grid",
+      });
+
+      const summaryStartY = (doc.lastAutoTable?.finalY || sectionY + 4) + 8;
+      doc.setFontSize(11);
+      doc.text("Number of faculty in the department for both UG and PG", 14, summaryStartY);
+
+      const summary = computeDesignationSummaryFromRows(rows, selectedAcademicYear);
+      if (summary) {
+        autoTable(doc, {
+          head: [[
+            "Designation",
+            `CAY (${summary.labels.CAY})`,
+            `CAYm1 (${summary.labels.CAYm1})`,
+            `CAYm2 (${summary.labels.CAYm2})`,
+          ]],
+          body: designationRowOrder.map((designation) => {
+            const row = summary.rows.find((item) => item.designation === designation);
+            return [
+              designation,
+              row?.CAY?.display || "0(R) + 0(C)",
+              row?.CAYm1?.display || "0(R) + 0(C)",
+              row?.CAYm2?.display || "0(R) + 0(C)",
+            ];
+          }),
+          startY: summaryStartY + 3,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [180, 158, 108], textColor: 20, fontStyle: "bold" },
+          alternateRowStyles: { fillColor: [247, 247, 247] },
+          theme: "grid",
+        });
+      } else {
+        autoTable(doc, {
+          body: [["Select academic year to include CAY/CAYm1/CAYm2 summary."]],
+          startY: summaryStartY + 3,
+          styles: { fontSize: 9, cellPadding: 3 },
+          theme: "grid",
+        });
+      }
     });
 
     doc.save("Faculty_Details.pdf");
   };
+
+  const isAllDepartmentsView = !selectedProgramId;
+
+  const groupedFacultyByDepartment = facultyList.reduce((acc, row) => {
+    const departmentKey = row.department_name || row.program_coursename || "Unassigned Department";
+    if (!acc[departmentKey]) {
+      acc[departmentKey] = [];
+    }
+    acc[departmentKey].push(row);
+    return acc;
+  }, {});
+
+  const renderFacultyRows = (rows) => (
+    <>
+      <div className="md:hidden space-y-3">
+        {rows.map((row, index) => (
+          <div key={`${row.id}-${index}`} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-800 break-words">{row.faculty_name || "-"}</p>
+              <span className="text-xs text-gray-500">#{index + 1}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-700">
+              <p><span className="font-medium">Designation:</span> {row.present_designation || "-"}</p>
+              <p><span className="font-medium">Degree:</span> {row.highest_degree || "-"}</p>
+              <p><span className="font-medium">Working:</span> {row.working_presently || "-"}</p>
+              <p><span className="font-medium">Experience:</span> {row.experience_years || "-"}</p>
+            </div>
+            {isAdmin() && (
+              <div className="mt-3 pt-2 border-t border-gray-100 text-right">
+                <button
+                  type="button"
+                  onClick={() => handleEdit(row)}
+                  className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm"
+                >
+                  Edit
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
+        <table className="min-w-[1600px] text-left text-[11px] sm:text-xs border-collapse border border-gray-300">
+          <thead>
+            <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">S.No</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Name of the Faculty</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">PAN No.</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">APAAR / AADHAAR Linked Faculty ID</th>
+              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Highest Degree</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">University Name</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Area of Specialization</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Joining</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Designation at Joining</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Present Designation</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date designated as Prof</th>
+              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Receiving highest degree</th>
+              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Nature of Association</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Working Currently</th>
+              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Leaving</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Experience (in years)</th>
+              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Is HoD / Principal</th>
+              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {rows.map((row, index) => (
+              <tr key={`${row.id}-${index}`} className="hover:bg-blue-50 transition-colors">
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{index + 1}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.faculty_name || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.pan_no || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.apaar_faculty_id || "-"}</td>
+                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.highest_degree || "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.university_name || "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.area_of_specialization || "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.designation_at_joining || "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300">{row.present_designation || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.nature_of_association || "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.working_presently || "-"}</td>
+                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString("en-GB") : "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.experience_years || "-"}</td>
+                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.is_hod_principal || "-"}</td>
+                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center whitespace-nowrap">
+                  {isAdmin() ? (
+                    <button type="button" onClick={() => handleEdit(row)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">Edit</button>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const renderCalculationTable = (statsData) => (
+    <div className="w-full mt-4">
+      <h5 className="text-sm font-semibold text-gray-700 mb-2">Number of faculty in the department for both UG and PG</h5>
+
+      {!selectedAcademicYear ? (
+        <div className="text-sm text-gray-500">Select academic year to view CAY summary.</div>
+      ) : !statsData ? (
+        <div className="text-sm text-gray-500">Unable to calculate summary for this department.</div>
+      ) : (
+        <>
+          <div className="md:hidden space-y-3">
+            {designationRowOrder.map((designation) => {
+              const row = statsData?.rows?.find((item) => item.designation === designation);
+              return (
+                <div key={designation} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                  <p className="text-sm font-semibold text-gray-800">{designation}</p>
+                  <div className="mt-2 text-xs text-gray-700 space-y-1">
+                    <p><span className="font-medium">CAY:</span> {row?.CAY?.display || "0(R) + 0(C)"}</p>
+                    <p><span className="font-medium">CAYm1:</span> {row?.CAYm1?.display || "0(R) + 0(C)"}</p>
+                    <p><span className="font-medium">CAYm2:</span> {row?.CAYm2?.display || "0(R) + 0(C)"}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-amber-100 text-gray-900">
+                  <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Designation</th>
+                  <th colSpan={3} className="px-3 py-3 border border-gray-300 font-semibold text-center">Number of faculty in the department for both UG and PG</th>
+                </tr>
+                <tr className="bg-amber-100 text-gray-900">
+                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
+                    CAY
+                    <div className="text-[11px] font-medium">{statsData?.labels?.CAY || "-"}</div>
+                  </th>
+                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
+                    CAYm1
+                    <div className="text-[11px] font-medium">{statsData?.labels?.CAYm1 || "-"}</div>
+                  </th>
+                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
+                    CAYm2
+                    <div className="text-[11px] font-medium">{statsData?.labels?.CAYm2 || "-"}</div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {designationRowOrder.map((designation) => {
+                  const row = statsData?.rows?.find((item) => item.designation === designation);
+                  return (
+                    <tr key={designation} className="hover:bg-gray-50">
+                      <td className="px-3 py-3 border border-gray-300 font-semibold">{designation}</td>
+                      <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAY?.display || "0(R) + 0(C)"}</td>
+                      <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm1?.display || "0(R) + 0(C)"}</td>
+                      <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm2?.display || "0(R) + 0(C)"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen overflow-x-hidden">
@@ -600,7 +984,7 @@ const FacultyByDepartment = ({ programId }) => {
           >
             <option value="">Select Program</option>
             {filteredPrograms.map((p) => (
-              <option key={p.id} value={String(p.id)}>
+              <option key={p.id} value={String(p.programNameId ?? p.id)}>
                 {p.coursename || p.programname || p.name}
               </option>
             ))}
@@ -900,164 +1284,32 @@ const FacultyByDepartment = ({ programId }) => {
               </div>
               {facultyList.length === 0 ? (
                 <div className="text-sm text-gray-500">No faculty records found.</div>
+              ) : (
+                isAllDepartmentsView ? (
+                  Object.entries(groupedFacultyByDepartment).map(([departmentName, rows]) => (
+                    <div key={departmentName} className="mt-4 first:mt-0">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">{departmentName}</h4>
+                      {renderFacultyRows(rows)}
+                      {renderCalculationTable(computeDesignationSummaryFromRows(rows, selectedAcademicYear))}
+                    </div>
+                  ))
+                ) : (
+                  renderFacultyRows(facultyList)
+                )
+              )}
+                </div>
+
+                {!isAllDepartmentsView && (
+                  <div className="w-full mt-8">
+                    {isStatsLoading ? (
+                      <div className="text-sm text-gray-500">Loading designation summary...</div>
+                    ) : statsError ? (
+                      <div className="text-sm text-red-600">{statsError}</div>
                     ) : (
-                      <>
-                        <div className="md:hidden space-y-3">
-                          {facultyList.map((row, index) => (
-                            <div key={row.id} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-gray-800 break-words">{row.faculty_name || "-"}</p>
-                                <span className="text-xs text-gray-500">#{index + 1}</span>
-                              </div>
-                              <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-700">
-                                <p><span className="font-medium">Designation:</span> {row.present_designation || "-"}</p>
-                                <p><span className="font-medium">Degree:</span> {row.highest_degree || "-"}</p>
-                                <p><span className="font-medium">Working:</span> {row.working_presently || "-"}</p>
-                                <p><span className="font-medium">Experience:</span> {row.experience_years || "-"}</p>
-                              </div>
-                              {isAdmin() && (
-                                <div className="mt-3 pt-2 border-t border-gray-100 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEdit(row)}
-                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm"
-                                  >
-                                    Edit
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
-                        <table className="min-w-[1600px] text-left text-[11px] sm:text-xs border-collapse border border-gray-300">
-                          <thead>
-                            <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-                              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">S.No</th>
-                              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Name of the Faculty</th>
-                              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">PAN No.</th>
-                              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">APAAR / AADHAAR Linked Faculty ID</th>
-                              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Highest Degree</th>
-                              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">University Name</th>
-                              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Area of Specialization</th>
-                              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Joining</th>
-                              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Designation at Joining</th>
-                              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Present Designation</th>
-                              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date designated as Prof</th>
-                              <th className="hidden lg:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Receiving highest degree</th>
-                              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Nature of Association</th>
-                              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Working Currently</th>
-                              <th className="hidden xl:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Date of Leaving</th>
-                              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Experience (in years)</th>
-                              <th className="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Is HoD / Principal</th>
-                              <th className="px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 font-semibold">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white">
-                            {facultyList.map((row, index) => (
-                              <tr key={row.id} className="hover:bg-blue-50 transition-colors">
-                                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{index + 1}</td>
-                                <td className="px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.faculty_name || '-'}</td>
-                                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.pan_no || '-'}</td>
-                                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.apaar_faculty_id || '-'}</td>
-                                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.highest_degree || '-'}</td>
-                                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.university_name || '-'}</td>
-                                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.area_of_specialization || '-'}</td>
-                                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_joining ? new Date(row.date_of_joining).toLocaleDateString('en-GB') : '-'}</td>
-                                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.designation_at_joining || '-'}</td>
-                                <td className="px-2 sm:px-3 py-2 border border-gray-300">{row.present_designation || '-'}</td>
-                                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_designated_as_prof ? new Date(row.date_designated_as_prof).toLocaleDateString('en-GB') : '-'}</td>
-                                <td className="hidden lg:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_receiving_highest_degree ? new Date(row.date_of_receiving_highest_degree).toLocaleDateString('en-GB') : '-'}</td>
-                                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300">{row.nature_of_association || '-'}</td>
-                                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.working_presently || '-'}</td>
-                                <td className="hidden xl:table-cell px-2 sm:px-3 py-2 border border-gray-300 whitespace-nowrap">{row.date_of_leaving ? new Date(row.date_of_leaving).toLocaleDateString('en-GB') : '-'}</td>
-                                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.experience_years || '-'}</td>
-                                <td className="hidden md:table-cell px-2 sm:px-3 py-2 border border-gray-300 text-center">{row.is_hod_principal || '-'}</td>
-                                <td className="px-2 sm:px-3 py-2 border border-gray-300 text-center whitespace-nowrap">
-                                  {isAdmin() ? (
-                                    <button type="button" onClick={() => handleEdit(row)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">Edit</button>
-                                  ) : (
-                                    <span className="text-gray-400">-</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      </>
+                      renderCalculationTable(designationStats)
                     )}
-                </div>
-
-                {/* AY designation summary table below faculty table */}
-                <div className="w-full mt-8">
-                  <h3 className="text-base font-semibold text-gray-800 mb-2">Number of faculty in the department for both UG and PG</h3>
-
-                  {!selectedProgramId || !selectedAcademicYear ? (
-                    <div className="text-sm text-gray-500">Select program and academic year to view CAY summary.</div>
-                  ) : isStatsLoading ? (
-                    <div className="text-sm text-gray-500">Loading designation summary...</div>
-                  ) : statsError ? (
-                    <div className="text-sm text-red-600">{statsError}</div>
-                  ) : (
-                    <>
-                      <div className="md:hidden space-y-3">
-                        {designationRowOrder.map((designation) => {
-                          const row = designationStats?.rows?.find((item) => item.designation === designation);
-                          return (
-                            <div key={designation} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                              <p className="text-sm font-semibold text-gray-800">{designation}</p>
-                              <div className="mt-2 text-xs text-gray-700 space-y-1">
-                                <p><span className="font-medium">CAY:</span> {row?.CAY?.display || "0(R) + 0(C)"}</p>
-                                <p><span className="font-medium">CAYm1:</span> {row?.CAYm1?.display || "0(R) + 0(C)"}</p>
-                                <p><span className="font-medium">CAYm2:</span> {row?.CAYm2?.display || "0(R) + 0(C)"}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="hidden md:block w-full max-w-full overflow-x-auto rounded-lg border border-gray-200">
-                        <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
-                          <thead>
-                            <tr className="bg-amber-100 text-gray-900">
-                              <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Designation</th>
-                              <th colSpan={3} className="px-3 py-3 border border-gray-300 font-semibold text-center">Number of faculty in the department for both UG and PG</th>
-                            </tr>
-                            <tr className="bg-amber-100 text-gray-900">
-                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
-                                CAY
-                                <div className="text-[11px] font-medium">{designationStats?.labels?.CAY || "-"}</div>
-                              </th>
-                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
-                                CAYm1
-                                <div className="text-[11px] font-medium">{designationStats?.labels?.CAYm1 || "-"}</div>
-                              </th>
-                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">
-                                CAYm2
-                                <div className="text-[11px] font-medium">{designationStats?.labels?.CAYm2 || "-"}</div>
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white">
-                            {designationRowOrder.map((designation) => {
-                              const row = designationStats?.rows?.find((item) => item.designation === designation);
-                              return (
-                                <tr key={designation} className="hover:bg-gray-50">
-                                  <td className="px-3 py-3 border border-gray-300 font-semibold">{designation}</td>
-                                  <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAY?.display || "0(R) + 0(C)"}</td>
-                                  <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm1?.display || "0(R) + 0(C)"}</td>
-                                  <td className="px-3 py-3 border border-gray-300 text-center">{row?.CAYm2?.display || "0(R) + 0(C)"}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-                </div>
+                  </div>
+                )}
             </div>
           </div>
         </main>
