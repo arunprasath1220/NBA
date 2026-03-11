@@ -12,6 +12,7 @@ import AlliedCourseMapping from "./pages/AlliedCourseMapping";
 import AlliedDepartment from "./pages/AlliedDepartment";
 import FacultyByDepartment from "./pages/FacultyByDepartment";
 import FacultyByAllied from "./pages/FacultyByAllied";
+import PartA from "./pages/PartA";
 import RatioByDepartment from "./pages/RatioByDepartment";
 import RatioByAllied from "./pages/RatioByAllied";
 import Unauthorized from "./pages/Unauthorized";
@@ -72,6 +73,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AlliedDepartment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/part-a"
+          element={
+            <ProtectedRoute>
+              <PartA />
             </ProtectedRoute>
           }
         />

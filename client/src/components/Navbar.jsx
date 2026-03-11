@@ -72,6 +72,7 @@ const Navbar = () => {
         { name: "All Programs", path: "/all-programs", icon: Icons.book },
         { name: "Allied Course Mapping", path: "/allied-mapping", icon: Icons.academic },
         { name: "Allied Department", path: "/allied-department", icon: Icons.link },
+        { name: "Part A Report", path: "/part-a", icon: Icons.book },
       ],
     },
     {
