@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import useFilterStore from "../store/filterStore";
@@ -36,6 +36,17 @@ const PartA = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("institution");
+
+  const TABS = [
+    { key: "institution", label: "Institution Details" },
+    { key: "programs", label: "Programs" },
+    { key: "accreditation", label: "Accreditation" },
+    { key: "faculty", label: "Faculty" },
+    { key: "students", label: "Students" },
+    { key: "visionMission", label: "Vision & Mission" },
+    { key: "contacts", label: "Contacts" },
+  ];
 
   // Institute profile
   const [profile, setProfile] = useState(null);
@@ -430,7 +441,7 @@ const PartA = () => {
               <div className="mb-3 text-sm text-gray-600">
                 Academic Year:{" "}
                 <span className="font-semibold text-gray-800">
-                  {selectedAcademicYear || "Not selected"}
+                  {selectedAcademicYear || "All Academic Years"}
                 </span>
                 {selectedProgramLabel && (
                   <span className="ml-4">
@@ -445,7 +456,7 @@ const PartA = () => {
               {/* Header */}
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-gray-800">
-                  Part A : Institutional Information
+                  Institutional Information
                 </h2>
                 <div className="flex items-center gap-4">
                   <button
@@ -470,8 +481,33 @@ const PartA = () => {
                 </div>
               </div>
 
-              {/* ---- Section: Institution Details Table ---- */}
+              {/* Tab Navigation */}
+              <div className="border-b border-gray-200 mb-6">
+                <nav className="flex gap-1 overflow-x-auto" aria-label="Tabs">
+                  {TABS.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === tab.key
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              {/* ---- Tab: Institution Details ---- */}
+              {activeTab === "institution" && (
               <div className="mb-8">
+                <p className="text-base font-semibold text-gray-800 mb-2">
+                  Institution Details
+                </p>
+                <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-300">
                   <tbody>
                     <tr>
@@ -536,9 +572,11 @@ const PartA = () => {
                     </tr>
                   </tbody>
                 </table>
+                </div>
               </div>
+              )}
 
-              {/* ---- Other Academic Institutions ---- */}
+              {/* ---- Other Academic Institutions ----
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-2">
                   Other Academic Institutions of the Trust/Society/Company
@@ -569,20 +607,19 @@ const PartA = () => {
                     </tr>
                   </tbody>
                 </table>
-              </div>
+              </div> */}
 
-              {/* ---- Details of all programs ---- */}
+              {/* ---- Tab: Programs ---- */}
+              {activeTab === "programs" && (
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-2">
                   Details of all the programs being offered by the Institution
                   under consideration:
                 </p>
-                <p className="text-xs text-gray-500 italic mb-3">
-                  &lt;To be entered for all program institution&gt;
-                </p>
+                
 
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300 text-xs">
+                  <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-blue-600 text-white">
                         <th className={headerCellClass}>S.N.</th>
@@ -840,7 +877,8 @@ const PartA = () => {
                         Sanctioned Intake for Last Five Years for the{" "}
                         {course.programName}
                       </p>
-                      <table className="border-collapse border border-gray-300 text-xs">
+                      <div className="overflow-x-auto">
+                      <table className="w-full border-collapse border border-gray-300">
                         <thead>
                           <tr className="bg-blue-600 text-white">
                             <th className={`${headerCellClass} min-w-[200px]`}>
@@ -880,6 +918,7 @@ const PartA = () => {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     </div>
                   );
                 })}
@@ -899,8 +938,10 @@ const PartA = () => {
                   <p>$ — UG / PG</p>
                 </div>
               </div>
+              )}
 
-              {/* ---- Section 8: Programs for Accreditation ---- */}
+              {/* ---- Tab: Accreditation ---- */}
+              {activeTab === "accreditation" && (
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-2">
                   8. Programs to be considered for Accreditation vide this
@@ -909,7 +950,8 @@ const PartA = () => {
 
                 {/* Table A8.1 */}
                 <p className="text-xs text-gray-600 mb-1">Table No. A8.1</p>
-                <table className="w-full border-collapse border border-gray-300 mb-4">
+                <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-blue-600 text-white">
                       <th className={`${headerCellClass} w-16`}>S No</th>
@@ -955,9 +997,11 @@ const PartA = () => {
                     )}
                   </tbody>
                 </table>
+                </div>
 
                 {/* Table A8.2 - Allied Departments */}
                 <p className="text-xs text-gray-600 mb-1">Table No. A8.2</p>
+                <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-blue-600 text-white">
@@ -1009,9 +1053,12 @@ const PartA = () => {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
+              )}
 
-              {/* ---- Section 9: Faculty Members ---- */}
+              {/* ---- Tab: Faculty ---- */}
+              {activeTab === "faculty" && (
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-2">
                   9. Total Number of Faculty Members in Various Departments:
@@ -1021,7 +1068,7 @@ const PartA = () => {
                 </p>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300 text-xs">
+                  <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-blue-600 text-white">
                         <th className={headerCellClass} rowSpan={3}>
@@ -1065,23 +1112,22 @@ const PartA = () => {
                       </tr>
                       <tr className="bg-blue-600 text-white">
                         {["CAY", "CAYm1", "CAYm2"].map((yr) => (
-                          <>
-                            <th key={`${yr}-prof`} className={headerCellClass}>
+                          <Fragment key={yr}>
+                            <th className={headerCellClass}>
                               No. of Prof.
                             </th>
-                            <th key={`${yr}-asp`} className={headerCellClass}>
+                            <th className={headerCellClass}>
                               No. of ASP
                             </th>
-                            <th key={`${yr}-ap`} className={headerCellClass}>
+                            <th className={headerCellClass}>
                               No. of AP
                             </th>
                             <th
-                              key={`${yr}-total`}
                               className={headerCellClass}
                             >
                               Total
                             </th>
-                          </>
+                          </Fragment>
                         ))}
                       </tr>
                     </thead>
@@ -1120,7 +1166,7 @@ const PartA = () => {
                               )}
                             </td>
                             {["CAY", "CAYm1", "CAYm2"].map((yr) => (
-                              <>
+                              <Fragment key={yr}>
                                 {["prof", "asp", "ap", "total"].map((f) => (
                                   <td
                                     key={`${yr}-${f}`}
@@ -1145,7 +1191,7 @@ const PartA = () => {
                                     )}
                                   </td>
                                 ))}
-                              </>
+                              </Fragment>
                             ))}
                             {isEditing && (
                               <td className={cellClass}>
@@ -1174,8 +1220,10 @@ const PartA = () => {
                   </button>
                 )}
               </div>
+              )}
 
-              {/* ---- Section 10: Student Strength ---- */}
+              {/* ---- Tab: Students ---- */}
+              {activeTab === "students" && (
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-2">
                   10. Total Number of Engineering Students in Various
@@ -1186,7 +1234,7 @@ const PartA = () => {
                 </p>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300 text-xs">
+                  <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-blue-600 text-white">
                         <th className={headerCellClass} rowSpan={2}>
@@ -1308,8 +1356,11 @@ const PartA = () => {
                   </button>
                 )}
               </div>
+              )}
 
-              {/* ---- Section 11: Vision ---- */}
+              {/* ---- Tab: Vision & Mission ---- */}
+              {activeTab === "visionMission" && (
+              <>
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-2">
                   11. Vision of the Institution:
@@ -1376,8 +1427,11 @@ const PartA = () => {
                   </button>
                 )}
               </div>
+              </>
+              )}
 
-              {/* ---- Section 13: Contact Information ---- */}
+              {/* ---- Tab: Contacts ---- */}
+              {activeTab === "contacts" && (
               <div className="mb-8">
                 <p className="text-base font-semibold text-gray-800 mb-4">
                   13. Contact Information of the Head of the Institution and NBA
@@ -1513,8 +1567,7 @@ const PartA = () => {
                 </div>
               </div>
 
-              {/* Reference note */}
-              <div className="text-xs text-gray-400 mb-4">Reference</div>
+              )}
             </div>
           )}
         </div>
