@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import useAuthStore from "../store/authStore";
 import useFilterStore from "../store/filterStore";
 import Navbar from "../components/Navbar";
@@ -103,6 +106,7 @@ const StudentsIntake = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [editFormData, setEditFormData] = useState({});
+  const [showForm, setShowForm] = useState(false);
 
   const [formData, setFormData] = useState({
     academicYear: "",
@@ -466,6 +470,165 @@ const StudentsIntake = () => {
     }
   };
 
+  const exportToExcel = () => {
+    if (filteredIntakeEntries.length === 0) {
+      alert("No intake data to export.");
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    // B1.1 Summary sheet(s)
+    if (selectedProgramId && intakeSummaryRows.length > 0) {
+      const summaryData = intakeSummaryRows.map((row) => ({
+        "Academic Year Label": row.label,
+        "Year": row.year,
+        "Sanctioned Intake": row.sanctionedIntake ?? "-",
+      }));
+      const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+      summarySheet["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "B1.1 Summary");
+    } else if (!selectedProgramId && intakeSummaryRowsByDepartment.length > 0) {
+      intakeSummaryRowsByDepartment.forEach((group) => {
+        const summaryData = group.rows.map((row) => ({
+          "Academic Year Label": row.label,
+          "Year": row.year,
+          "Sanctioned Intake": row.sanctionedIntake ?? "-",
+        }));
+        const sheetName = (group.departmentName || "Dept")
+          .replace(/[\\/?*[\]:]/g, "")
+          .trim()
+          .slice(0, 28) || "B1.1";
+        const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+        summarySheet["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, summarySheet, sheetName);
+      });
+    }
+
+    // All Intake Entries sheet
+    const entriesData = filteredIntakeEntries.map((entry, index) => ({
+      "S.No": index + 1,
+      "Program Name": entry.program_name || "-",
+      "Program Level": entry.program_level || "-",
+      "AICTE Approval Year": entry.year_of_aicte_approval || "-",
+      "Initial Intake": entry.initial_intake || "-",
+      "Current Intake": entry.current_intake || "-",
+      "Intake Increase": entry.intake_increase === "Yes" || Number(entry.intake_increase) > 0 ? "Yes" : "No",
+      "Program for Consideration": entry.program_for_consideration || "-",
+      "Accreditation Status": entry.accreditation_status || "-",
+      "Accreditation From": entry.accreditation_from || "-",
+      "Accreditation To": entry.accreditation_to || "-",
+      "Program Duration": entry.program_duration || "-",
+      "Academic Year": entry.academic_year || "-",
+    }));
+    const entriesSheet = XLSX.utils.json_to_sheet(entriesData);
+    entriesSheet["!cols"] = [
+      { wch: 6 }, { wch: 30 }, { wch: 16 }, { wch: 20 }, { wch: 16 },
+      { wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 36 }, { wch: 18 },
+      { wch: 18 }, { wch: 18 }, { wch: 16 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, entriesSheet, "Intake Entries");
+    XLSX.writeFile(workbook, "Students_Intake.xlsx");
+  };
+
+  const exportToPDF = () => {
+    if (filteredIntakeEntries.length === 0) {
+      alert("No intake data to export.");
+      return;
+    }
+
+    const doc = new jsPDF("landscape");
+    let startY = 15;
+
+    doc.setFontSize(14);
+    doc.text("Students Intake", 14, startY);
+    if (selectedAcademicYear) {
+      doc.setFontSize(10);
+      doc.text(`Academic Year: ${selectedAcademicYear}`, 14, startY + 6);
+      startY += 14;
+    } else {
+      startY += 8;
+    }
+
+    // B1.1 Summary
+    const summaryRows = selectedProgramId
+      ? intakeSummaryRows
+      : intakeSummaryRowsByDepartment.flatMap((g) => g.rows);
+    if (summaryRows.length > 0) {
+      doc.setFontSize(11);
+      doc.text("Table B1.1 - Sanctioned Intake Summary", 14, startY);
+      autoTable(doc, {
+        head: [["Academic Year Label", "Year", "Sanctioned Intake"]],
+        body: summaryRows.map((row) => [row.label, row.year, row.sanctionedIntake ?? "-"]),
+        startY: startY + 4,
+        styles: { fontSize: 9, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [239, 246, 255] },
+        theme: "grid",
+      });
+      startY = (doc.lastAutoTable?.finalY || startY + 4) + 12;
+    }
+
+    // All Intake Entries
+    const tableHeaders = [
+      "S.No", "Program Name", "Level", "AICTE Year",
+      "Initial", "Current", "Increase", "For Consideration",
+      "Accreditation Status", "From", "To", "Duration", "Acad. Year",
+    ];
+
+    const buildBody = (entries) =>
+      entries.map((entry, index) => [
+        String(index + 1),
+        entry.program_name || "-",
+        entry.program_level || "-",
+        entry.year_of_aicte_approval || "-",
+        entry.initial_intake || "-",
+        entry.current_intake || "-",
+        entry.intake_increase === "Yes" || Number(entry.intake_increase) > 0 ? "Yes" : "No",
+        entry.program_for_consideration || "-",
+        entry.accreditation_status || "-",
+        entry.accreditation_from || "-",
+        entry.accreditation_to || "-",
+        entry.program_duration || "-",
+        entry.academic_year || "-",
+      ]);
+
+    doc.setFontSize(11);
+    doc.text("All Intake Entries", 14, startY);
+
+    if (selectedProgramId) {
+      autoTable(doc, {
+        head: [tableHeaders],
+        body: buildBody(filteredIntakeEntries),
+        startY: startY + 4,
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [239, 246, 255] },
+        theme: "grid",
+      });
+    } else {
+      intakeEntriesByDepartment.forEach(({ departmentName, entries }, sectionIndex) => {
+        const sectionStartY =
+          sectionIndex === 0
+            ? startY + 4
+            : (doc.lastAutoTable?.finalY || startY) + 12;
+        doc.setFontSize(10);
+        doc.text(`Department: ${departmentName}`, 14, sectionStartY - 4);
+        autoTable(doc, {
+          head: [tableHeaders],
+          body: buildBody(entries),
+          startY: sectionStartY,
+          styles: { fontSize: 7, cellPadding: 2 },
+          headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+          alternateRowStyles: { fillColor: [239, 246, 255] },
+          theme: "grid",
+        });
+      });
+    }
+
+    doc.save("Students_Intake.pdf");
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -475,84 +638,87 @@ const StudentsIntake = () => {
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-gray-50">
+    <div className="flex min-h-screen overflow-x-hidden">
       <Navbar />
       <TopBar />
       <main className="flex-1 min-w-0 lg:ml-[240px] overflow-x-hidden">
         <div className="p-6 pt-16 lg:pt-14 max-w-full">
           <div className="w-full max-w-full space-y-6">
-            <div className="mb-4 text-sm text-gray-600">
-              Academic Year: <span className="font-semibold text-gray-800">{selectedAcademicYear || "Not selected"}</span>
+            <div className="mb-4 border-b border-gray-200 pb-3 flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Students Intake</h1>
+                <p className="mt-1 text-xs text-gray-600">
+                  Academic Year: <span className="font-medium text-gray-800">{selectedAcademicYear || "Not selected"}</span>
+                </p>
+              </div>
+              {isAdmin() && (
+                <button
+                  type="button"
+                  onClick={() => setShowForm((prev) => !prev)}
+                  className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  aria-expanded={showForm}
+                >
+                  {showForm ? "Close Intake Form" : "Intake Form"}
+                </button>
+              )}
             </div>
 
-            <h1 className="text-3xl font-bold text-gray-900">Students Intake</h1>
+            {isAdmin() && showForm && (
+              <form
+                onSubmit={handleFormSubmit}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6 p-6 bg-white rounded-lg shadow-sm border border-gray-200"
+              >
+                <h3 className="col-span-full text-sm font-semibold text-gray-800">Add Intake Details</h3>
 
-            {isAdmin() && (
-              <form onSubmit={handleFormSubmit} className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Intake Form</h2>
-                  <p className="text-sm text-gray-500 mt-1">Enter the intake details in the format below.</p>
-                </div>
+                {displayedFields.map((field) => (
+                  <div key={field.name} className="flex flex-col">
+                    <label className="text-sm font-medium text-gray-700 mb-1">{field.label}</label>
 
-                <div className="overflow-x-auto rounded-lg border border-gray-300 mb-6">
-                  <div className="inline-block min-w-full">
-                    <div className="grid gap-0" style={{ gridTemplateColumns: `repeat(${displayedFields.length}, minmax(120px, 1fr))` }}>
-                      {displayedFields.map((field) => (
-                        <div key={field.name} className="bg-gray-100 border border-gray-300 px-3 py-4 text-center font-semibold text-sm text-gray-800">
-                          {field.label}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid gap-0" style={{ gridTemplateColumns: `repeat(${displayedFields.length}, minmax(120px, 1fr))` }}>
-                      {displayedFields.map((field) => (
-                        <div key={field.name} className="border border-gray-300 p-3">
-                          {field.name === "programName" ? (
-                            <select
-                              name={field.name}
-                              value={formData[field.name]}
-                              onChange={handleInputChange}
-                              className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                            >
-                              <option value="">{programOptions.length ? "Select program" : "No programs available"}</option>
-                              {programOptions.map((program) => (
-                                <option key={program.id} value={String(program.id)}>
-                                  {program.departmentName || program.programName}
-                                </option>
-                              ))}
-                            </select>
-                          ) : field.type === "select" ? (
-                            <select
-                              name={field.name}
-                              value={formData[field.name]}
-                              onChange={handleInputChange}
-                              className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                            >
-                              {field.name !== "programForConsideration" && <option value="">{field.placeholder || "Select"}</option>}
-                              {(field.options || []).map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              type="text"
-                              name={field.name}
-                              value={formData[field.name]}
-                              onChange={handleInputChange}
-                              placeholder={field.placeholder}
-                              readOnly={field.readOnly === true}
-                              className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    {field.name === "programName" ? (
+                      <select
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleInputChange}
+                        className="border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">{programOptions.length ? "Select program" : "No programs available"}</option>
+                        {programOptions.map((program) => (
+                          <option key={program.id} value={String(program.id)}>
+                            {program.departmentName || program.programName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : field.type === "select" ? (
+                      <select
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleInputChange}
+                        className="border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {field.name !== "programForConsideration" && (
+                          <option value="">{field.placeholder || "Select"}</option>
+                        )}
+                        {(field.options || []).map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleInputChange}
+                        placeholder={field.placeholder}
+                        readOnly={field.readOnly === true}
+                        className="border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    )}
                   </div>
-                </div>
+                ))}
 
-                <div className="flex items-center justify-end gap-3">
+                <div className="col-span-full flex items-center justify-end gap-3 pt-2">
                   {saveStatus.message && (
                     <p className={`mr-auto text-sm ${saveStatus.type === "error" ? "text-red-600" : "text-green-600"}`}>
                       {saveStatus.message}
@@ -576,25 +742,54 @@ const StudentsIntake = () => {
               </form>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Table B1.1</h2>
+            <section className="w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Table B1.1</h2>
+                {(intakeSummaryRows.length > 0 || intakeSummaryRowsByDepartment.length > 0) && (
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={exportToExcel}
+                      className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportToPDF}
+                      className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
+                    </button>
+                  </div>
+                )}
+              </div>
               {selectedProgramId ? (
                 intakeSummaryRows.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border border-gray-300">
-                  <table className="w-full text-sm border-collapse">
+                  <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
                     <thead>
-                      <tr className="bg-amber-100">
-                        <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Academic Year</th>
-                        <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Year</th>
-                        <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Sanctioned Intake</th>
+                      <tr className="bg-amber-100 text-gray-900">
+                        <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Academic Year Label</th>
+                        <th colSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Table B1.1 - Sanctioned Intake</th>
+                      </tr>
+                      <tr className="bg-amber-100 text-gray-900">
+                        <th className="px-3 py-2 border border-gray-300 font-semibold text-center">Year</th>
+                        <th className="px-3 py-2 border border-gray-300 font-semibold text-center">Sanctioned Intake</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="bg-white">
                       {intakeSummaryRows.map((row) => (
-                        <tr key={row.label}>
-                          <td className="border border-gray-300 px-3 py-3 font-medium">{row.label}</td>
-                          <td className="border border-gray-300 px-3 py-3 text-gray-600">{row.year}</td>
-                          <td className="border border-gray-300 px-3 py-3">{row.sanctionedIntake}</td>
+                        <tr key={row.label} className="hover:bg-gray-50">
+                          <td className="px-3 py-3 border border-gray-300 font-semibold">{row.label}</td>
+                          <td className="px-3 py-3 border border-gray-300 text-center">{row.year}</td>
+                          <td className="px-3 py-3 border border-gray-300 text-center">{row.sanctionedIntake}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -611,20 +806,23 @@ const StudentsIntake = () => {
                     <div key={group.departmentName}>
                       <h3 className="mb-2 text-base font-semibold text-gray-800">{group.departmentName}</h3>
                       <div className="overflow-x-auto rounded-lg border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+                        <table className="min-w-[900px] w-full text-left text-xs border-collapse border border-gray-300">
                           <thead>
-                            <tr className="bg-amber-100">
-                              <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Academic Year</th>
-                              <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Year</th>
-                              <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Sanctioned Intake</th>
+                            <tr className="bg-amber-100 text-gray-900">
+                              <th rowSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Academic Year Label</th>
+                              <th colSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center">Table B1.1 - Sanctioned Intake</th>
+                            </tr>
+                            <tr className="bg-amber-100 text-gray-900">
+                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">Year</th>
+                              <th className="px-3 py-2 border border-gray-300 font-semibold text-center">Sanctioned Intake</th>
                             </tr>
                           </thead>
-                          <tbody>
+                          <tbody className="bg-white">
                             {group.rows.map((row) => (
-                              <tr key={`${group.departmentName}-${row.label}`}>
-                                <td className="border border-gray-300 px-3 py-3 font-medium">{row.label}</td>
-                                <td className="border border-gray-300 px-3 py-3 text-gray-600">{row.year}</td>
-                                <td className="border border-gray-300 px-3 py-3">{row.sanctionedIntake}</td>
+                              <tr key={`${group.departmentName}-${row.label}`} className="hover:bg-gray-50">
+                                <td className="px-3 py-3 border border-gray-300 font-semibold">{row.label}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center">{row.year}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center">{row.sanctionedIntake}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -638,18 +836,44 @@ const StudentsIntake = () => {
                   <p className="text-sm text-gray-500">No B1.1 intake data available.</p>
                 </div>
               )}
-            </div>
+            </section>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">All Intake Entries</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {isLoadingEntries
-                    ? "Loading entries..."
-                    : selectedProgramId
-                      ? `Showing ${filteredIntakeEntries.length} entries for ${selectedProgramLabel || "selected department"}`
-                      : `Showing ${filteredIntakeEntries.length} saved entries`}
-                </p>
+            <section className="w-full">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">All Intake Entries</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {isLoadingEntries
+                      ? "Loading entries..."
+                      : selectedProgramId
+                        ? `Showing ${filteredIntakeEntries.length} entries for ${selectedProgramLabel || "selected department"}`
+                        : `Showing ${filteredIntakeEntries.length} saved entries`}
+                  </p>
+                </div>
+                {!isLoadingEntries && filteredIntakeEntries.length > 0 && (
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={exportToExcel}
+                      className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportToPDF}
+                      className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
+                    </button>
+                  </div>
+                )}
               </div>
 
               {isLoadingEntries ? (
@@ -659,27 +883,27 @@ const StudentsIntake = () => {
               ) : filteredIntakeEntries.length > 0 ? (
                 selectedProgramId ? (
                   <div className="overflow-x-auto rounded-lg border border-gray-300">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-100 border-b border-gray-300">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Name</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Level</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">AICTE Year</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Initial Intake</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Current Intake</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Intake Increase</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program for Consideration</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation Status</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation From</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation To</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Duration</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Academic Year</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Actions</th>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program Name</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program Level</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">AICTE Year</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Initial Intake</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Current Intake</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Intake Increase</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program for Consideration</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Accreditation Status</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Accreditation From</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Accreditation To</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program Duration</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Academic Year</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="bg-white">
                         {filteredIntakeEntries.map((entry) => (
-                          <tr key={entry.id} className="border-b border-gray-300 hover:bg-gray-50">
+                          <tr key={entry.id} className="border-b border-gray-300 hover:bg-blue-50 transition-colors">
                             <td className="px-4 py-3 text-gray-700">{entry.program_name || "-"}</td>
                             <td className="px-4 py-3 text-gray-700">{entry.program_level || "-"}</td>
                             <td className="px-4 py-3 text-gray-700">{entry.year_of_aicte_approval || "-"}</td>
@@ -727,27 +951,27 @@ const StudentsIntake = () => {
                       <div key={group.departmentName}>
                         <h3 className="mb-2 text-base font-semibold text-gray-800">{group.departmentName}</h3>
                         <div className="overflow-x-auto rounded-lg border border-gray-300">
-                          <table className="w-full text-sm">
-                            <thead className="bg-gray-100 border-b border-gray-300">
-                              <tr>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Name</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Level</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">AICTE Year</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Initial Intake</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Current Intake</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Intake Increase</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program for Consideration</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation Status</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation From</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation To</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Duration</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Academic Year</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Actions</th>
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program Name</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program Level</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">AICTE Year</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Initial Intake</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Current Intake</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Intake Increase</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program for Consideration</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Accreditation Status</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Accreditation From</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Accreditation To</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Program Duration</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Academic Year</th>
+                                <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Actions</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="bg-white">
                               {group.entries.map((entry) => (
-                                <tr key={entry.id} className="border-b border-gray-300 hover:bg-gray-50">
+                                <tr key={entry.id} className="border-b border-gray-300 hover:bg-blue-50 transition-colors">
                                   <td className="px-4 py-3 text-gray-700">{entry.program_name || "-"}</td>
                                   <td className="px-4 py-3 text-gray-700">{entry.program_level || "-"}</td>
                                   <td className="px-4 py-3 text-gray-700">{entry.year_of_aicte_approval || "-"}</td>
@@ -804,7 +1028,7 @@ const StudentsIntake = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </section>
           </div>
         </div>
 
