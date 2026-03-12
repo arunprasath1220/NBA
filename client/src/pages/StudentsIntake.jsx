@@ -470,29 +470,32 @@ const StudentsIntake = () => {
     }
   };
 
-  const exportToExcel = () => {
-    if (filteredIntakeEntries.length === 0) {
-      alert("No intake data to export.");
+  const exportB11ToExcel = () => {
+    const hasSummaryData = selectedProgramId
+      ? intakeSummaryRows.length > 0
+      : intakeSummaryRowsByDepartment.length > 0;
+
+    if (!hasSummaryData) {
+      alert("No B1.1 intake data to export.");
       return;
     }
 
     const workbook = XLSX.utils.book_new();
 
-    // B1.1 Summary sheet(s)
-    if (selectedProgramId && intakeSummaryRows.length > 0) {
+    if (selectedProgramId) {
       const summaryData = intakeSummaryRows.map((row) => ({
         "Academic Year Label": row.label,
-        "Year": row.year,
+        Year: row.year,
         "Sanctioned Intake": row.sanctionedIntake ?? "-",
       }));
       const summarySheet = XLSX.utils.json_to_sheet(summaryData);
       summarySheet["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(workbook, summarySheet, "B1.1 Summary");
-    } else if (!selectedProgramId && intakeSummaryRowsByDepartment.length > 0) {
+    } else {
       intakeSummaryRowsByDepartment.forEach((group) => {
         const summaryData = group.rows.map((row) => ({
           "Academic Year Label": row.label,
-          "Year": row.year,
+          Year: row.year,
           "Sanctioned Intake": row.sanctionedIntake ?? "-",
         }));
         const sheetName = (group.departmentName || "Dept")
@@ -505,7 +508,16 @@ const StudentsIntake = () => {
       });
     }
 
-    // All Intake Entries sheet
+    XLSX.writeFile(workbook, "Students_Intake_B1_1.xlsx");
+  };
+
+  const exportEntriesToExcel = () => {
+    if (filteredIntakeEntries.length === 0) {
+      alert("No intake entries to export.");
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
     const entriesData = filteredIntakeEntries.map((entry, index) => ({
       "S.No": index + 1,
       "Program Name": entry.program_name || "-",
@@ -521,19 +533,84 @@ const StudentsIntake = () => {
       "Program Duration": entry.program_duration || "-",
       "Academic Year": entry.academic_year || "-",
     }));
+
     const entriesSheet = XLSX.utils.json_to_sheet(entriesData);
     entriesSheet["!cols"] = [
       { wch: 6 }, { wch: 30 }, { wch: 16 }, { wch: 20 }, { wch: 16 },
       { wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 36 }, { wch: 18 },
       { wch: 18 }, { wch: 18 }, { wch: 16 },
     ];
+
     XLSX.utils.book_append_sheet(workbook, entriesSheet, "Intake Entries");
-    XLSX.writeFile(workbook, "Students_Intake.xlsx");
+    XLSX.writeFile(workbook, "Students_Intake_Entries.xlsx");
   };
 
-  const exportToPDF = () => {
+  const exportB11ToPDF = () => {
+    const hasSummaryData = selectedProgramId
+      ? intakeSummaryRows.length > 0
+      : intakeSummaryRowsByDepartment.length > 0;
+
+    if (!hasSummaryData) {
+      alert("No B1.1 intake data to export.");
+      return;
+    }
+
+    const doc = new jsPDF("landscape");
+    let startY = 15;
+
+    doc.setFontSize(14);
+    doc.text("Students Intake", 14, startY);
+    doc.setFontSize(11);
+    doc.text("Table B1.1 - Sanctioned Intake", 14, startY + 7);
+    if (selectedAcademicYear) {
+      doc.setFontSize(10);
+      doc.text(`Academic Year: ${selectedAcademicYear}`, 14, startY + 13);
+      startY += 18;
+    } else {
+      startY += 12;
+    }
+
+    const renderB11Table = (rows, tableStartY) => {
+      autoTable(doc, {
+        head: [
+          [
+            { content: "Academic Year Label", rowSpan: 2, styles: { halign: "center", valign: "middle" } },
+            { content: "Table B1.1 - Sanctioned Intake", colSpan: 2, styles: { halign: "center" } },
+          ],
+          [
+            { content: "Year", styles: { halign: "center" } },
+            { content: "Sanctioned Intake", styles: { halign: "center" } },
+          ],
+        ],
+        body: rows.map((row) => [row.label, row.year, String(row.sanctionedIntake ?? "-")]),
+        startY: tableStartY,
+        styles: { fontSize: 9, cellPadding: 2.5, lineColor: [209, 213, 219], lineWidth: 0.1 },
+        headStyles: { fillColor: [254, 243, 199], textColor: [17, 24, 39], fontStyle: "bold" },
+        bodyStyles: { textColor: [55, 65, 81] },
+        theme: "grid",
+      });
+    };
+
+    if (selectedProgramId) {
+      renderB11Table(intakeSummaryRows, startY);
+    } else {
+      intakeSummaryRowsByDepartment.forEach((group, index) => {
+        if (index > 0) {
+          doc.addPage();
+          startY = 15;
+        }
+        doc.setFontSize(11);
+        doc.text(`Department: ${group.departmentName}`, 14, startY);
+        renderB11Table(group.rows, startY + 4);
+      });
+    }
+
+    doc.save("Students_Intake_B1_1.pdf");
+  };
+
+  const exportEntriesToPDF = () => {
     if (filteredIntakeEntries.length === 0) {
-      alert("No intake data to export.");
+      alert("No intake entries to export.");
       return;
     }
 
@@ -550,26 +627,6 @@ const StudentsIntake = () => {
       startY += 8;
     }
 
-    // B1.1 Summary
-    const summaryRows = selectedProgramId
-      ? intakeSummaryRows
-      : intakeSummaryRowsByDepartment.flatMap((g) => g.rows);
-    if (summaryRows.length > 0) {
-      doc.setFontSize(11);
-      doc.text("Table B1.1 - Sanctioned Intake Summary", 14, startY);
-      autoTable(doc, {
-        head: [["Academic Year Label", "Year", "Sanctioned Intake"]],
-        body: summaryRows.map((row) => [row.label, row.year, row.sanctionedIntake ?? "-"]),
-        startY: startY + 4,
-        styles: { fontSize: 9, cellPadding: 2 },
-        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: [239, 246, 255] },
-        theme: "grid",
-      });
-      startY = (doc.lastAutoTable?.finalY || startY + 4) + 12;
-    }
-
-    // All Intake Entries
     const tableHeaders = [
       "S.No", "Program Name", "Level", "AICTE Year",
       "Initial", "Current", "Increase", "For Consideration",
@@ -626,7 +683,7 @@ const StudentsIntake = () => {
       });
     }
 
-    doc.save("Students_Intake.pdf");
+    doc.save("Students_Intake_Entries.pdf");
   };
 
   if (isLoading) {
@@ -749,7 +806,7 @@ const StudentsIntake = () => {
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
-                      onClick={exportToExcel}
+                      onClick={exportB11ToExcel}
                       className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -759,7 +816,7 @@ const StudentsIntake = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={exportToPDF}
+                      onClick={exportB11ToPDF}
                       className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -854,7 +911,7 @@ const StudentsIntake = () => {
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
-                      onClick={exportToExcel}
+                      onClick={exportEntriesToExcel}
                       className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -864,7 +921,7 @@ const StudentsIntake = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={exportToPDF}
+                      onClick={exportEntriesToPDF}
                       className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
