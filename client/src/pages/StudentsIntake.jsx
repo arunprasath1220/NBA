@@ -60,6 +60,35 @@ const toInt = (value) => {
 
 const getIncreaseFlag = (initial, current) => (toInt(current) > toInt(initial) ? "Yes" : "No");
 
+const buildIntakeSummaryRows = (entries, selectedAcademicYear) => {
+  const selectedStart = parseAcademicYearStart(selectedAcademicYear);
+  const maxStartFromData = entries.reduce((max, entry) => {
+    const start = parseAcademicYearStart(entry.academic_year);
+    return start !== null && start > max ? start : max;
+  }, -Infinity);
+
+  const baseYear = selectedStart ?? (Number.isFinite(maxStartFromData) ? maxStartFromData : new Date().getFullYear());
+
+  const intakeByYear = entries.reduce((acc, entry) => {
+    const label = String(entry.academic_year || "").trim();
+    if (!label) return acc;
+    const currentIntake = toInt(entry.current_intake);
+    acc[label] = (acc[label] || 0) + currentIntake;
+    return acc;
+  }, {});
+
+  return Array.from({ length: 6 }, (_, offset) => {
+    const yearLabel = formatAcademicYear(baseYear - offset);
+    const hasYearData = Object.prototype.hasOwnProperty.call(intakeByYear, yearLabel);
+    return {
+      label: offset === 0 ? "Current Academic Year (CAY)" : `CAY-${offset}`,
+      year: yearLabel,
+      sanctionedIntake: hasYearData ? intakeByYear[yearLabel] : null,
+      hasYearData,
+    };
+  }).filter((row) => row.hasYearData);
+};
+
 const StudentsIntake = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
@@ -189,34 +218,44 @@ const StudentsIntake = () => {
 
   const filteredIntakeEntries = useMemo(() => summarySourceEntries, [summarySourceEntries]);
 
-  const intakeSummaryRows = useMemo(() => {
-    const selectedStart = parseAcademicYearStart(selectedAcademicYear);
-    const maxStartFromData = summarySourceEntries.reduce((max, entry) => {
-      const start = parseAcademicYearStart(entry.academic_year);
-      return start !== null && start > max ? start : max;
-    }, -Infinity);
-
-    const baseYear =
-      selectedStart ?? (Number.isFinite(maxStartFromData) ? maxStartFromData : new Date().getFullYear());
-
-    const intakeByYear = summarySourceEntries.reduce((acc, entry) => {
-      const label = String(entry.academic_year || "").trim();
-      if (!label) return acc;
-      const currentIntake = toInt(entry.current_intake);
-      acc[label] = (acc[label] || 0) + currentIntake;
+  const intakeEntriesByDepartment = useMemo(() => {
+    const groups = filteredIntakeEntries.reduce((acc, entry) => {
+      const departmentName = String(entry.program_name || "Unknown Department").trim() || "Unknown Department";
+      if (!acc[departmentName]) {
+        acc[departmentName] = [];
+      }
+      acc[departmentName].push(entry);
       return acc;
     }, {});
 
-    return Array.from({ length: 6 }, (_, offset) => {
-      const yearLabel = formatAcademicYear(baseYear - offset);
-      return {
-        label: offset === 0 ? "Current Academic Year (CAY)" : `CAY-${offset}`,
-        year: yearLabel,
-        sanctionedIntake:
-          Object.prototype.hasOwnProperty.call(intakeByYear, yearLabel) ? intakeByYear[yearLabel] : "-",
-      };
-    });
-  }, [selectedAcademicYear, summarySourceEntries]);
+    return Object.entries(groups)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([departmentName, entries]) => ({ departmentName, entries }));
+  }, [filteredIntakeEntries]);
+
+  const intakeSummaryRows = useMemo(
+    () => buildIntakeSummaryRows(summarySourceEntries, selectedAcademicYear),
+    [selectedAcademicYear, summarySourceEntries],
+  );
+
+  const intakeSummaryRowsByDepartment = useMemo(() => {
+    const groups = filteredIntakeEntries.reduce((acc, entry) => {
+      const departmentName = String(entry.program_name || "Unknown Department").trim() || "Unknown Department";
+      if (!acc[departmentName]) {
+        acc[departmentName] = [];
+      }
+      acc[departmentName].push(entry);
+      return acc;
+    }, {});
+
+    return Object.entries(groups)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([departmentName, entries]) => ({
+        departmentName,
+        rows: buildIntakeSummaryRows(entries, selectedAcademicYear),
+      }))
+      .filter((group) => group.rows.length > 0);
+  }, [filteredIntakeEntries, selectedAcademicYear]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -539,26 +578,66 @@ const StudentsIntake = () => {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Table B1.1</h2>
-              <div className="overflow-x-auto rounded-lg border border-gray-300">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-amber-100">
-                      <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Academic Year</th>
-                      <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Year</th>
-                      <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Sanctioned Intake</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {intakeSummaryRows.map((row) => (
-                      <tr key={row.label}>
-                        <td className="border border-gray-300 px-3 py-3 font-medium">{row.label}</td>
-                        <td className="border border-gray-300 px-3 py-3 text-gray-600">{row.year}</td>
-                        <td className="border border-gray-300 px-3 py-3">{row.sanctionedIntake}</td>
+              {selectedProgramId ? (
+                intakeSummaryRows.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-gray-300">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-amber-100">
+                        <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Academic Year</th>
+                        <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Year</th>
+                        <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Sanctioned Intake</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {intakeSummaryRows.map((row) => (
+                        <tr key={row.label}>
+                          <td className="border border-gray-300 px-3 py-3 font-medium">{row.label}</td>
+                          <td className="border border-gray-300 px-3 py-3 text-gray-600">{row.year}</td>
+                          <td className="border border-gray-300 px-3 py-3">{row.sanctionedIntake}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                ) : (
+                  <div className="flex min-h-[180px] items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50">
+                    <p className="text-sm text-gray-500">No B1.1 intake data available for this department.</p>
+                  </div>
+                )
+              ) : intakeSummaryRowsByDepartment.length > 0 ? (
+                <div className="space-y-6">
+                  {intakeSummaryRowsByDepartment.map((group) => (
+                    <div key={group.departmentName}>
+                      <h3 className="mb-2 text-base font-semibold text-gray-800">{group.departmentName}</h3>
+                      <div className="overflow-x-auto rounded-lg border border-gray-300">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-amber-100">
+                              <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Academic Year</th>
+                              <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Year</th>
+                              <th className="border border-gray-300 px-3 py-3 text-left font-semibold">Sanctioned Intake</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.rows.map((row) => (
+                              <tr key={`${group.departmentName}-${row.label}`}>
+                                <td className="border border-gray-300 px-3 py-3 font-medium">{row.label}</td>
+                                <td className="border border-gray-300 px-3 py-3 text-gray-600">{row.year}</td>
+                                <td className="border border-gray-300 px-3 py-3">{row.sanctionedIntake}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex min-h-[180px] items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50">
+                  <p className="text-sm text-gray-500">No B1.1 intake data available.</p>
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -578,69 +657,145 @@ const StudentsIntake = () => {
                   <div className="w-8 h-8 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
                 </div>
               ) : filteredIntakeEntries.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-gray-300">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-100 border-b border-gray-300">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Name</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Level</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">AICTE Year</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Initial Intake</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Current Intake</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Intake Increase</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Program for Consideration</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation Status</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation From</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation To</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Duration</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Academic Year</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-800">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredIntakeEntries.map((entry) => (
-                        <tr key={entry.id} className="border-b border-gray-300 hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-700">{entry.program_name || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.program_level || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.year_of_aicte_approval || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.initial_intake || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.current_intake || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">
-                            {entry.intake_increase === "Yes" || Number(entry.intake_increase) > 0 ? "Yes" : "No"}
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{entry.program_for_consideration || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700 max-w-xs truncate" title={entry.accreditation_status || "-"}>
-                            {entry.accreditation_status || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{entry.accreditation_from || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.accreditation_to || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.program_duration || "-"}</td>
-                          <td className="px-4 py-3 text-gray-700">{entry.academic_year || "-"}</td>
-                          <td className="px-4 py-3 text-center">
-                            {isAdmin() && (
-                              <div className="inline-flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditModal(entry)}
-                                  className="inline-flex items-center justify-center px-3 py-1 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors text-xs font-medium"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteEntry(entry.id)}
-                                  className="inline-flex items-center justify-center px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            )}
-                          </td>
+                selectedProgramId ? (
+                  <div className="overflow-x-auto rounded-lg border border-gray-300">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100 border-b border-gray-300">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Name</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Level</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">AICTE Year</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Initial Intake</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Current Intake</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Intake Increase</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program for Consideration</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation Status</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation From</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation To</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Duration</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Academic Year</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-800">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {filteredIntakeEntries.map((entry) => (
+                          <tr key={entry.id} className="border-b border-gray-300 hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-700">{entry.program_name || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.program_level || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.year_of_aicte_approval || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.initial_intake || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.current_intake || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">
+                              {entry.intake_increase === "Yes" || Number(entry.intake_increase) > 0 ? "Yes" : "No"}
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">{entry.program_for_consideration || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700 max-w-xs truncate" title={entry.accreditation_status || "-"}>
+                              {entry.accreditation_status || "-"}
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">{entry.accreditation_from || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.accreditation_to || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.program_duration || "-"}</td>
+                            <td className="px-4 py-3 text-gray-700">{entry.academic_year || "-"}</td>
+                            <td className="px-4 py-3 text-center">
+                              {isAdmin() && (
+                                <div className="inline-flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditModal(entry)}
+                                    className="inline-flex items-center justify-center px-3 py-1 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors text-xs font-medium"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteEntry(entry.id)}
+                                    className="inline-flex items-center justify-center px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {intakeEntriesByDepartment.map((group) => (
+                      <div key={group.departmentName}>
+                        <h3 className="mb-2 text-base font-semibold text-gray-800">{group.departmentName}</h3>
+                        <div className="overflow-x-auto rounded-lg border border-gray-300">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-100 border-b border-gray-300">
+                              <tr>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Name</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Level</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">AICTE Year</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Initial Intake</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Current Intake</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Intake Increase</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program for Consideration</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation Status</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation From</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Accreditation To</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Program Duration</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Academic Year</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.entries.map((entry) => (
+                                <tr key={entry.id} className="border-b border-gray-300 hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-gray-700">{entry.program_name || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.program_level || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.year_of_aicte_approval || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.initial_intake || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.current_intake || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">
+                                    {entry.intake_increase === "Yes" || Number(entry.intake_increase) > 0 ? "Yes" : "No"}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.program_for_consideration || "-"}</td>
+                                  <td
+                                    className="px-4 py-3 text-gray-700 max-w-xs truncate"
+                                    title={entry.accreditation_status || "-"}
+                                  >
+                                    {entry.accreditation_status || "-"}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.accreditation_from || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.accreditation_to || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.program_duration || "-"}</td>
+                                  <td className="px-4 py-3 text-gray-700">{entry.academic_year || "-"}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {isAdmin() && (
+                                      <div className="inline-flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditModal(entry)}
+                                          className="inline-flex items-center justify-center px-3 py-1 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors text-xs font-medium"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteEntry(entry.id)}
+                                          className="inline-flex items-center justify-center px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
                 <div className="flex min-h-[240px] items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50">
                   <div className="text-center">
