@@ -208,11 +208,14 @@ const StudentsIntake = () => {
 
   const summarySourceEntries = useMemo(() => {
     if (selectedProgramId) {
-      // selectedProgramId is from program_name table; intake uses all_program IDs.
-      // Find all_program IDs whose programNameId matches selectedProgramId.
+      // selectedProgramId may be either all_program.id (global filter) or program_name.id.
       const matchingAllProgramIds = new Set(
         allPrograms
-          .filter((p) => String(p.programNameId) === String(selectedProgramId))
+          .filter(
+            (p) =>
+              String(p.id) === String(selectedProgramId) ||
+              String(p.programNameId) === String(selectedProgramId),
+          )
           .map((p) => String(p.id)),
       );
       return allIntakeEntries.filter((entry) => matchingAllProgramIds.has(String(entry.program_id)));

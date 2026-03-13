@@ -8,6 +8,7 @@ const instituteRoutes = require("./institute/instituteRoutes");
 const alliedCourseRoutes = require("./alliedCourse/alliedCourseRoutes");
 const facultyRoutes = require("./faculty/facultyRoutes");
 const intakeRoutes = require("./intake/intakeRoutes");
+const studentByDepartmentRoutes = require("./studentByDepartment/studentByDepartmentRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +29,7 @@ app.use("/api/institute", instituteRoutes);
 app.use("/api/allied-course", alliedCourseRoutes);
 app.use("/api/faculty", facultyRoutes);
 app.use("/api/intake", intakeRoutes);
+app.use("/api/student-by-department", studentByDepartmentRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {

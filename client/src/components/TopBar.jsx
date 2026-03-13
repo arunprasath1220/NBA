@@ -39,13 +39,17 @@ const TopBar = () => {
   useEffect(() => {
     const fetchPrograms = async () => {
       try {
-        const response = await fetch(`${API_URL}/institute/programs`, {
+        const response = await fetch(`${API_URL}/institute/courses`, {
           credentials: "include",
         });
         const data = await response.json();
 
         if (data.success && data.data) {
-          setPrograms(data.data);
+          const normalized = data.data.map((program) => ({
+            ...program,
+            coursename: program.programName || program.departmentName || "",
+          }));
+          setPrograms(normalized);
         }
       } catch (error) {
         console.error("Error fetching programs for top bar filters:", error);
@@ -64,7 +68,7 @@ const TopBar = () => {
     }
 
     const selected = programs.find((program) => String(program.id) === programId);
-    setSelectedProgram(programId, selected?.coursename || "");
+    setSelectedProgram(programId, selected?.coursename || selected?.programName || selected?.departmentName || "");
   };
   return (
     <header className="fixed top-0 left-0 right-0 lg:left-[240px] min-h-12 bg-white border-b border-gray-200 z-20 px-4 py-2">

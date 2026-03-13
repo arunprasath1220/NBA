@@ -16,7 +16,7 @@ const DRAFT_STORAGE_KEY = "institute_profile_draft";
 const InstituteProfile = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
-  const { selectedProgramId, selectedProgramLabel } = useFilterStore();
+  const { selectedProgramId, selectedProgramLabel, programs } = useFilterStore();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -156,7 +156,9 @@ const InstituteProfile = () => {
     }));
 
     if (selectedProgramId) {
-      fetchProgramDetails(selectedProgramId);
+      const selectedProgram = programs.find((program) => String(program.id) === String(selectedProgramId));
+      const programNameId = selectedProgram?.programNameId || selectedProgramId;
+      fetchProgramDetails(programNameId);
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -164,7 +166,7 @@ const InstituteProfile = () => {
         discipline: "",
       }));
     }
-  }, [selectedProgramId, selectedProgramLabel]);
+  }, [selectedProgramId, selectedProgramLabel, programs]);
 
   // Auto-save draft to localStorage whenever formData changes
   useEffect(() => {
