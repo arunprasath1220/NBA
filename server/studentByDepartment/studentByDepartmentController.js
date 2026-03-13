@@ -36,52 +36,22 @@ const toAcademicYearCandidates = (yearLabel) => {
   return [formatAcademicYear(start), String(start)];
 };
 
-const getStudentByDepartment = async (req, res) => {
-  try {
-    const { program_id, academic_year } = req.query;
+const calculateProgramYearRows = ({
+  programId,
+  cayStartYear,
+  intakeRows,
+  entryRows,
+}) => {
+  const currentCay = formatAcademicYear(cayStartYear);
+  const previousCay = formatAcademicYear(cayStartYear - 1);
+  const twoYearsBackCay = formatAcademicYear(cayStartYear - 2);
 
-    if (!program_id) {
-      return res.status(400).json({ success: false, error: "program_id is required" });
-    }
+  const secondYearByCay = new Map();
+  const fallbackByYearOfStudy = new Map();
 
-    if (!academic_year || String(academic_year).trim() === "") {
-      return res.status(400).json({ success: false, error: "academic_year is required" });
-    }
-
-    const normalizedProgramId = Number.parseInt(program_id, 10);
-    const normalizedAcademicYear = String(academic_year).trim();
-
-    const cayStartYear = parseAcademicYearStart(normalizedAcademicYear);
-    if (cayStartYear === null) {
-      return res.status(400).json({
-        success: false,
-        error: "academic_year must be in YYYY-YY or YYYY format",
-      });
-    }
-
-    const [programIntakeRows] = await pool.execute(
-      `SELECT academic_year, current_intake
-       FROM intake_details
-       WHERE program_id = ?`,
-      [normalizedProgramId],
-    );
-
-    const currentCay = formatAcademicYear(cayStartYear);
-    const previousCay = formatAcademicYear(cayStartYear - 1);
-    const twoYearsBackCay = formatAcademicYear(cayStartYear - 2);
-
-    const [entryRows] = await pool.execute(
-      `SELECT cay_academic_year, year_of_study, actual_lateral_admitted
-       FROM student_by_department
-       WHERE program_id = ?
-         AND cay_academic_year IN (?, ?, ?)`,
-      [normalizedProgramId, currentCay, previousCay, twoYearsBackCay],
-    );
-
-    const secondYearByCay = new Map();
-    const fallbackByYearOfStudy = new Map();
-
-    entryRows.forEach((row) => {
+  entryRows
+    .filter((row) => Number(row.program_id) === Number(programId))
+    .forEach((row) => {
       const normalizedCay = String(row.cay_academic_year || "").trim();
       const studyYear = Number(row.year_of_study);
       const value = Number(row.actual_lateral_admitted || 0);
@@ -92,55 +62,183 @@ const getStudentByDepartment = async (req, res) => {
       fallbackByYearOfStudy.set(studyYear, value);
     });
 
-    const currentYearActual =
-      secondYearByCay.get(currentCay) ??
-      fallbackByYearOfStudy.get(2) ??
-      0;
+  const currentYearActual =
+    secondYearByCay.get(currentCay) ??
+    fallbackByYearOfStudy.get(2) ??
+    0;
 
-    const thirdYearActual =
-      secondYearByCay.get(previousCay) ??
-      fallbackByYearOfStudy.get(3) ??
-      0;
+  const thirdYearActual =
+    secondYearByCay.get(previousCay) ??
+    fallbackByYearOfStudy.get(3) ??
+    0;
 
-    const fourthYearActual =
-      secondYearByCay.get(twoYearsBackCay) ??
-      fallbackByYearOfStudy.get(4) ??
-      0;
+  const fourthYearActual =
+    secondYearByCay.get(twoYearsBackCay) ??
+    fallbackByYearOfStudy.get(4) ??
+    0;
 
-    const rows = DEFAULT_STUDY_YEARS.map((year) => {
-      const yearOffset = year - 1; // 2nd=>1, 3rd=>2, 4th=>3
-      const intakeStartYear = cayStartYear - yearOffset;
-      const candidates = getAcademicYearCandidates(intakeStartYear);
+  const rows = DEFAULT_STUDY_YEARS.map((year) => {
+    const yearOffset = year - 1; // 2nd=>1, 3rd=>2, 4th=>3
+    const intakeStartYear = cayStartYear - yearOffset;
+    const candidates = getAcademicYearCandidates(intakeStartYear);
 
-      const sanctionIntake = programIntakeRows
-        .filter((row) => candidates.includes(String(row.academic_year || "").trim()))
-        .reduce((sum, row) => sum + (Number.parseInt(row.current_intake, 10) || 0), 0);
+    const sanctionIntake = intakeRows
+      .filter((row) => Number(row.program_id) === Number(programId))
+      .filter((row) => candidates.includes(String(row.academic_year || "").trim()))
+      .reduce((sum, row) => sum + (Number.parseInt(row.current_intake, 10) || 0), 0);
 
-      return {
-        year_of_study: year,
-        intake_academic_year: formatAcademicYear(intakeStartYear),
-        sanction_intake: sanctionIntake,
-        actual_lateral_admitted:
-          year === 2
-            ? currentYearActual
-            : year === 3
-              ? thirdYearActual
-              : fourthYearActual,
-      };
-    });
+    return {
+      year_of_study: year,
+      intake_academic_year: formatAcademicYear(intakeStartYear),
+      sanction_intake: sanctionIntake,
+      actual_lateral_admitted:
+        year === 2
+          ? currentYearActual
+          : year === 3
+            ? thirdYearActual
+            : fourthYearActual,
+    };
+  });
 
-    const totalSanctionIntake = rows.reduce(
-      (sum, row) => sum + (Number.parseInt(row.sanction_intake, 10) || 0),
-      0,
+  const totalSanctionIntake = rows.reduce(
+    (sum, row) => sum + (Number.parseInt(row.sanction_intake, 10) || 0),
+    0,
+  );
+
+  return {
+    rows,
+    totalSanctionIntake,
+  };
+};
+
+const getStudentByDepartment = async (req, res) => {
+  try {
+    const { program_id, academic_year } = req.query;
+
+    if (!academic_year || String(academic_year).trim() === "") {
+      return res.status(400).json({ success: false, error: "academic_year is required" });
+    }
+    const normalizedAcademicYear = String(academic_year).trim();
+
+    const cayStartYear = parseAcademicYearStart(normalizedAcademicYear);
+    if (cayStartYear === null) {
+      return res.status(400).json({
+        success: false,
+        error: "academic_year must be in YYYY-YY or YYYY format",
+      });
+    }
+
+    const currentCay = formatAcademicYear(cayStartYear);
+    const previousCay = formatAcademicYear(cayStartYear - 1);
+    const twoYearsBackCay = formatAcademicYear(cayStartYear - 2);
+
+    if (!program_id) {
+      const [programRows] = await pool.execute(
+        `SELECT ap.id, ap.department_name, pn.coursename AS program_name
+         FROM all_program ap
+         LEFT JOIN program_name pn ON pn.id = ap.programname
+         ORDER BY ap.department_name ASC, pn.coursename ASC`,
+      );
+
+      if (!programRows.length) {
+        return res.json({
+          success: true,
+          data: {
+            academic_year: normalizedAcademicYear,
+            departments: [],
+          },
+        });
+      }
+
+      const programIds = programRows.map((row) => Number(row.id)).filter(Number.isFinite);
+      const placeholders = programIds.map(() => "?").join(",");
+
+      const [intakeRows] = await pool.execute(
+        `SELECT program_id, academic_year, current_intake
+         FROM intake_details
+         WHERE program_id IN (${placeholders})`,
+        programIds,
+      );
+
+      const [entryRows] = await pool.execute(
+        `SELECT program_id, cay_academic_year, year_of_study, actual_lateral_admitted
+         FROM student_by_department
+         WHERE program_id IN (${placeholders})
+           AND cay_academic_year IN (?, ?, ?)`,
+        [...programIds, currentCay, previousCay, twoYearsBackCay],
+      );
+
+      const departmentMap = new Map();
+
+      programRows.forEach((programRow) => {
+        const programId = Number(programRow.id);
+        const departmentName = String(programRow.department_name || "Unknown Department").trim() || "Unknown Department";
+        const programName = String(programRow.program_name || "-").trim() || "-";
+
+        const calculated = calculateProgramYearRows({
+          programId,
+          cayStartYear,
+          intakeRows,
+          entryRows,
+        });
+
+        if (!departmentMap.has(departmentName)) {
+          departmentMap.set(departmentName, []);
+        }
+
+        departmentMap.get(departmentName).push({
+          program_id: programId,
+          program_name: programName,
+          sanction_intake: calculated.totalSanctionIntake,
+          rows: calculated.rows,
+        });
+      });
+
+      const departments = Array.from(departmentMap.entries()).map(([department_name, programs]) => ({
+        department_name,
+        programs,
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          academic_year: normalizedAcademicYear,
+          departments,
+        },
+      });
+    }
+
+    const normalizedProgramId = Number.parseInt(program_id, 10);
+
+    const [programIntakeRows] = await pool.execute(
+      `SELECT academic_year, current_intake
+       FROM intake_details
+       WHERE program_id = ?`,
+      [normalizedProgramId],
     );
+
+    const [entryRows] = await pool.execute(
+      `SELECT program_id, cay_academic_year, year_of_study, actual_lateral_admitted
+       FROM student_by_department
+       WHERE program_id = ?
+         AND cay_academic_year IN (?, ?, ?)`,
+      [normalizedProgramId, currentCay, previousCay, twoYearsBackCay],
+    );
+
+    const calculated = calculateProgramYearRows({
+      programId: normalizedProgramId,
+      cayStartYear,
+      intakeRows: programIntakeRows.map((row) => ({ ...row, program_id: normalizedProgramId })),
+      entryRows,
+    });
 
     return res.json({
       success: true,
       data: {
         program_id: normalizedProgramId,
         academic_year: normalizedAcademicYear,
-        sanction_intake: totalSanctionIntake,
-        rows,
+        sanction_intake: calculated.totalSanctionIntake,
+        rows: calculated.rows,
       },
     });
   } catch (error) {

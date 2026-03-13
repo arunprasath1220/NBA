@@ -6,50 +6,12 @@ import Navbar from "../components/Navbar";
 import TopBar from "../components/TopBar";
 
 const studyYears = ["2nd Year", "3rd Year", "4th Year"];
-const summaryBuckets = ["cay", "caym1", "caym2"];
 
 const yearToStudyNumber = {
   "2nd Year": 2,
   "3rd Year": 3,
   "4th Year": 4,
 };
-
-const formatAcademicYear = (startYear) => `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
-
-const parseAcademicYearStart = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-
-  if (/^\d{4}-\d{2}$/.test(raw)) {
-    const start = Number.parseInt(raw.slice(0, 4), 10);
-    const yy = Number.parseInt(raw.slice(5, 7), 10);
-    if ((start + 1) % 100 !== yy) return null;
-    return start;
-  }
-
-  if (/^\d{4}$/.test(raw)) {
-    return Number.parseInt(raw, 10);
-  }
-
-  return null;
-};
-
-const emptySummaryData = (yearLabel = "") => ({
-  academicYear: yearLabel,
-  sanctionByStudyYear: {
-    "2nd Year": 0,
-    "3rd Year": 0,
-    "4th Year": 0,
-  },
-  actualByStudyYear: {
-    "2nd Year": 0,
-    "3rd Year": 0,
-    "4th Year": 0,
-  },
-  sanctionSubtotal: 0,
-  actualSubtotal: 0,
-  total: 0,
-});
 
 const StudentsByDepartment = () => {
   const navigate = useNavigate();
@@ -66,11 +28,7 @@ const StudentsByDepartment = () => {
   const [isLoadingSummaryData, setIsLoadingSummaryData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: "", message: "" });
-  const [threeYearSummary, setThreeYearSummary] = useState({
-    cay: emptySummaryData(),
-    caym1: emptySummaryData(),
-    caym2: emptySummaryData(),
-  });
+  const [departmentSummaries, setDepartmentSummaries] = useState([]);
   const [actualAdmissions, setActualAdmissions] = useState({
     "2nd Year": "",
     "3rd Year": "",
@@ -154,117 +112,46 @@ const StudentsByDepartment = () => {
   }, [selectedProgramId, selectedAcademicYear]);
 
   useEffect(() => {
-    const fetchThreeYearSummary = async () => {
-      const baseYearStart = parseAcademicYearStart(selectedAcademicYear);
-
-      if (!selectedProgramId || baseYearStart === null) {
-        setThreeYearSummary({
-          cay: emptySummaryData(baseYearStart !== null ? formatAcademicYear(baseYearStart) : ""),
-          caym1: emptySummaryData(baseYearStart !== null ? formatAcademicYear(baseYearStart - 1) : ""),
-          caym2: emptySummaryData(baseYearStart !== null ? formatAcademicYear(baseYearStart - 2) : ""),
-        });
+    const fetchDepartmentSummary = async () => {
+      if (!selectedAcademicYear?.trim()) {
+        setDepartmentSummaries([]);
         return;
       }
 
       setIsLoadingSummaryData(true);
       try {
-        const years = {
-          cay: formatAcademicYear(baseYearStart),
-          caym1: formatAcademicYear(baseYearStart - 1),
-          caym2: formatAcademicYear(baseYearStart - 2),
-        };
+        const params = new URLSearchParams({
+          academic_year: selectedAcademicYear.trim(),
+        });
 
-        const responses = await Promise.all(
-          summaryBuckets.map(async (bucket) => {
-            const params = new URLSearchParams({
-              program_id: selectedProgramId,
-              academic_year: years[bucket],
-            });
+        const response = await fetch(`http://localhost:5000/api/student-by-department?${params.toString()}`, {
+          credentials: "include",
+        });
+        const data = await response.json();
 
-            const response = await fetch(`http://localhost:5000/api/student-by-department?${params.toString()}`, {
-              credentials: "include",
-            });
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-              return { bucket, year: years[bucket], data: emptySummaryData(years[bucket]) };
-            }
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load student by department summary");
+        }
 
-            const sanctionByStudyYear = {
-              "2nd Year": 0,
-              "3rd Year": 0,
-              "4th Year": 0,
-            };
-
-            const actualByStudyYear = {
-              "2nd Year": 0,
-              "3rd Year": 0,
-              "4th Year": 0,
-            };
-
-            (data.data?.rows || []).forEach((row) => {
-              const yearOfStudy = Number(row.year_of_study);
-              const sanction = Number(row.sanction_intake || 0);
-              const actual = Number(row.actual_lateral_admitted || 0);
-              if (yearOfStudy === 2) {
-                sanctionByStudyYear["2nd Year"] = sanction;
-                actualByStudyYear["2nd Year"] = actual;
-              }
-              if (yearOfStudy === 3) {
-                sanctionByStudyYear["3rd Year"] = sanction;
-                actualByStudyYear["3rd Year"] = actual;
-              }
-              if (yearOfStudy === 4) {
-                sanctionByStudyYear["4th Year"] = sanction;
-                actualByStudyYear["4th Year"] = actual;
-              }
-            });
-
-            const sanctionSubtotal = studyYears.reduce(
-              (sum, label) => sum + (Number.parseInt(sanctionByStudyYear[label], 10) || 0),
-              0,
-            );
-
-            const actualSubtotal = studyYears.reduce(
-              (sum, label) => sum + (Number.parseInt(actualByStudyYear[label], 10) || 0),
-              0,
-            );
-
-            return {
-              bucket,
-              data: {
-                academicYear: years[bucket],
-                sanctionByStudyYear,
-                actualByStudyYear,
-                sanctionSubtotal,
-                actualSubtotal,
-                total: sanctionSubtotal + actualSubtotal,
-              },
-            };
-          }),
-        );
-
-        const summaryObject = responses.reduce(
-          (acc, item) => {
-            acc[item.bucket] = item.data;
-            return acc;
-          },
-          {
-            cay: emptySummaryData(years.cay),
-            caym1: emptySummaryData(years.caym1),
-            caym2: emptySummaryData(years.caym2),
-          },
-        );
-
-        setThreeYearSummary(summaryObject);
+        setDepartmentSummaries(data.data?.departments || []);
       } catch (error) {
-        console.error("Error loading three-year student summary:", error);
+        console.error("Error loading department student summary:", error);
+        setDepartmentSummaries([]);
       } finally {
         setIsLoadingSummaryData(false);
       }
     };
 
-    fetchThreeYearSummary();
-  }, [selectedProgramId, selectedAcademicYear]);
+    fetchDepartmentSummary();
+  }, [selectedAcademicYear]);
+
+  const getStudyYearValues = (programRows = [], yearNumber) => {
+    const yearRow = programRows.find((row) => Number(row.year_of_study) === Number(yearNumber));
+    return {
+      sanction: Number(yearRow?.sanction_intake || 0),
+      actual: Number(yearRow?.actual_lateral_admitted || 0),
+    };
+  };
 
   const totals = useMemo(() => {
     const actualSubtotal = studyYears.reduce(
@@ -360,117 +247,109 @@ const StudentsByDepartment = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-white">
       <Navbar />
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
-        <div className="p-6 pt-16 lg:pt-14">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-3xl font-bold text-gray-900">Student Details by Department</h1>
+        <div className="pt-16 lg:pt-14 p-4">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="text-xl font-semibold text-gray-800">Student Details by Department</h1>
               {isAdmin() && (
                 <button
                   type="button"
                   onClick={() => setShowForm((prev) => !prev)}
-                  className="self-start text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                  className="self-start rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                 >
-                  Student by Department
+                  {showForm ? "Close Entry" : "Student by Department"}
                 </button>
               )}
             </div>
 
             {!showForm ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
-                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Last Three Years Overview</h2>
-                  <p className="text-sm text-gray-600">Using global filters from top bar.</p>
+              <section className="w-full space-y-6">
+                {departmentSummaries.map((department) => (
+                  <div key={department.department_name} className="space-y-2">
+                    <h2 className="text-base font-semibold text-gray-900 uppercase tracking-wide">
+                      {department.department_name}
+                    </h2>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[1200px] w-full text-left text-xs border-collapse border border-gray-300">
+                        <thead>
+                          <tr>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Program</th>
+                            <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">2nd Year</th>
+                            <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">3rd Year</th>
+                            <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">4th Year</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sub-Total (Sanction)</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sub-Total (Actual)</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Total</th>
+                          </tr>
+                          <tr>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Academic Year</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Sanction</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Actual</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Sanction</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Actual</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Sanction</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Actual</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">-</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">-</th>
+                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">-</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white">
+                          {(department.programs || []).map((program) => {
+                            const second = getStudyYearValues(program.rows, 2);
+                            const third = getStudyYearValues(program.rows, 3);
+                            const fourth = getStudyYearValues(program.rows, 4);
+                            const sanctionSubtotal = second.sanction + third.sanction + fourth.sanction;
+                            const actualSubtotal = second.actual + third.actual + fourth.actual;
+
+                            return (
+                              <tr key={program.program_id} className="hover:bg-gray-50">
+                                <td className="px-3 py-3 border border-gray-300 font-medium text-gray-900">{program.program_name}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{second.sanction}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{second.actual}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{third.sanction}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{third.actual}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{fourth.sanction}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{fourth.actual}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">{sanctionSubtotal}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">{actualSubtotal}</td>
+                                <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-100">{sanctionSubtotal + actualSubtotal}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    {isLoadingSummaryData
+                      ? "Loading department-wise student details..."
+                      : !selectedAcademicYear
+                        ? "Select Academic Year from the top global filter."
+                        : departmentSummaries.length === 0
+                          ? "No department data found for selected academic year."
+                          : "Showing all courses grouped by department for selected academic year."}
+                  </p>
                 </div>
-
-                <div className="overflow-x-auto rounded-lg border border-gray-300">
-                  <table className="min-w-[980px] w-full text-left text-xs border-collapse border border-gray-300">
-                    <thead>
-                      <tr>
-                        <th colSpan={7} className="px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">
-                          Name of the Program <span className="font-bold">{selectedProgramLabel}</span>
-                        </th>
-                      </tr>
-                      <tr>
-                        <th rowSpan={3} className="w-[140px] px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900 align-top">
-                          Year of Study
-                        </th>
-                        <th colSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">CAY</th>
-                        <th colSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">CAYm1</th>
-                        <th colSpan={2} className="px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">CAYm2</th>
-                      </tr>
-                      <tr>
-                        <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white">{threeYearSummary.cay.academicYear || "-"}</th>
-                        <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white">{threeYearSummary.caym1.academicYear || "-"}</th>
-                        <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white">{threeYearSummary.caym2.academicYear || "-"}</th>
-                      </tr>
-                      <tr>
-                        {summaryBuckets.flatMap((bucket) => [
-                          <th key={`${bucket}-sanction`} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sanction Intake</th>,
-                          <th key={`${bucket}-actual`} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Actual admitted in Lateral Entry</th>,
-                        ])}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white">
-                      {studyYears.map((yearLabel) => (
-                        <tr key={yearLabel} className="hover:bg-gray-50">
-                          <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-white">{yearLabel}</td>
-                          {summaryBuckets.flatMap((bucket) => [
-                            <td key={`${yearLabel}-${bucket}-sanction`} className="px-3 py-3 border border-gray-300 text-center text-gray-700">
-                              {threeYearSummary[bucket].sanctionByStudyYear[yearLabel] || 0}
-                            </td>,
-                            <td key={`${yearLabel}-${bucket}-actual`} className="px-3 py-3 border border-gray-300 text-center text-gray-700">
-                              {threeYearSummary[bucket].actualByStudyYear[yearLabel] || 0}
-                            </td>,
-                          ])}
-                        </tr>
-                      ))}
-
-                      <tr>
-                        <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-amber-50">Sub-Total</td>
-                        {summaryBuckets.flatMap((bucket) => [
-                          <td key={`${bucket}-subtotal-sanction`} className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
-                            {threeYearSummary[bucket].sanctionSubtotal}
-                          </td>,
-                          <td key={`${bucket}-subtotal-actual`} className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
-                            {threeYearSummary[bucket].actualSubtotal}
-                          </td>,
-                        ])}
-                      </tr>
-
-                      <tr>
-                        <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-amber-50">Total</td>
-                        {summaryBuckets.map((bucket) => (
-                          <td key={`${bucket}-total`} colSpan={2} className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-100">
-                            {threeYearSummary[bucket].total}
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <p className="mt-4 text-sm text-gray-600">
-                  {isLoadingSummaryData
-                    ? "Loading last three years data..."
-                    : !selectedProgramId || !selectedAcademicYear
-                      ? "Select Program and Academic Year from the top global filters."
-                      : "Displaying CAY, CAYm1, and CAYm2 outside the entry form."}
-                </p>
 
                 {isAdmin() && (
-                  <p className="mt-2 text-sm text-gray-600">
+                  <p className="text-sm text-gray-600">
                     Click <span className="font-semibold text-blue-600">Student by Department</span> in the top right to open the entry form.
                   </p>
                 )}
-              </div>
+              </section>
             ) : (
-              <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Table B1.1 Style Student Details</h2>
+              <form onSubmit={handleSubmit} className="w-full overflow-hidden">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Table B1.1 Entry</h2>
+                  <p className="text-sm text-gray-500 mt-1">Enter only 2nd Year value for selected CAY; progression is auto-derived.</p>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border border-gray-300">
@@ -575,6 +454,13 @@ const StudentsByDepartment = () => {
                       {submitStatus.message}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setActualAdmissions({ "2nd Year": "", "3rd Year": actualAdmissions["3rd Year"], "4th Year": actualAdmissions["4th Year"] })}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Reset
+                  </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
