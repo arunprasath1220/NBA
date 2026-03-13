@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import nbaLogo from "../assets/National_Board_of_Accreditation.svg.png";
@@ -51,6 +51,26 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
     </svg>
   ),
+  chevronDown: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  ),
+  chevronRight: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  ),
+  document: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  clipboardList: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
 };
 
 const Navbar = () => {
@@ -58,13 +78,16 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { logout } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+  const [preQualifierOpen, setPreQualifierOpen] = useState(true);
+  const [sarOpen, setSarOpen] = useState(false);
+  const [partBOpen, setPartBOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
-  const menuItems = [
+  const preQualifierSections = [
     {
       section: "INSTITUTE",
       items: [
@@ -84,13 +107,57 @@ const Navbar = () => {
     {
       section: "ANALYTICS",
       items: [
+        { name: "Student Details by Dept.", path: "/students-department", icon: Icons.users },
+        { name: "Student Details by Allied Dept.", path: "/students-allied", icon: Icons.user },
         { name: "Faculty Student Ratio by Dept.", path: "/ratio-department", icon: Icons.chart },
         { name: "Faculty Student Ratio by Allied", path: "/ratio-allied", icon: Icons.ratio },
       ],
     },
   ];
 
+  const sarCriteria = Array.from({ length: 9 }, (_, i) => ({
+    name: `Criteria ${i + 1}`,
+    path: `/sar/part-b/criteria-${i + 1}`,
+  }));
+
   const isActive = (path) => location.pathname === path;
+  const isPreQualifierRoute = preQualifierSections.some((section) =>
+    section.items.some((item) => item.path === location.pathname)
+  );
+  const isSarRoute = location.pathname.startsWith("/sar");
+
+  useEffect(() => {
+    if (isSarRoute) {
+      setSarOpen(true);
+      setPreQualifierOpen(false);
+      if (location.pathname.startsWith("/sar/part-b")) {
+        setPartBOpen(true);
+      }
+    } else {
+      setPreQualifierOpen(true);
+      setSarOpen(false);
+    }
+  }, [isSarRoute, location.pathname]);
+
+  const togglePreQualifier = () => {
+    setPreQualifierOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setSarOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const toggleSar = () => {
+    setSarOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setPreQualifierOpen(false);
+      }
+      return next;
+    });
+  };
 
   return (
     <>
@@ -134,38 +201,149 @@ const Navbar = () => {
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 overflow-y-auto pt-5">
-          {menuItems.map((section, idx) => (
-            <div key={idx} className="mb-5">
-              <h3 className="px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                {section.section}
-              </h3>
-              <ul className="space-y-0.5">
-                {section.items.map((item, itemIdx) => (
-                  <li key={itemIdx}>
-                    <Link
-                      to={item.path}
-                      onClick={() => setIsOpen(false)}
-                      className={`
-                        flex items-center gap-3 px-5 py-2.5 text-[14px] font-medium
+        <nav className="flex-1 overflow-y-auto hide-scrollbar pt-4">
+          <div className="space-y-1">
+            <div>
+              <button
+                onClick={togglePreQualifier}
+                className={`w-full flex items-center gap-3 px-5 py-2.5 text-[14px] font-medium
+                  transition-all duration-200 border-r-[3px]
+                  ${
+                    isPreQualifierRoute
+                      ? "bg-blue-50 text-blue-600 border-blue-600"
+                      : "text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900"
+                  }
+                `}
+              >
+                <span className={isPreQualifierRoute ? "text-blue-600" : "text-gray-500"}>{Icons.book}</span>
+                <span className="flex-1 text-left">Pre-Qualifier</span>
+                <span className={isPreQualifierRoute ? "text-blue-600" : "text-gray-400"}>
+                  {preQualifierOpen ? Icons.chevronDown : Icons.chevronRight}
+                </span>
+              </button>
+
+              {preQualifierOpen && (
+                <div className="mt-0.5 space-y-3">
+                  {preQualifierSections.map((section, sectionIdx) => (
+                    <div key={sectionIdx}>
+                      <h3 className="pl-12 pr-5 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                        {section.section}
+                      </h3>
+                      <ul className="space-y-0.5">
+                        {section.items.map((item, itemIdx) => (
+                          <li key={itemIdx}>
+                            <Link
+                              to={item.path}
+                              onClick={() => setIsOpen(false)}
+                              className={`
+                                flex items-center gap-3 pl-12 pr-5 py-2 text-[13px] font-medium
+                                transition-all duration-200 border-r-[3px]
+                                ${
+                                  isActive(item.path)
+                                    ? "bg-blue-50 text-blue-600 border-blue-600"
+                                    : "text-gray-500 border-transparent hover:bg-gray-50 hover:text-gray-800"
+                                }
+                              `}
+                            >
+                              <span className={isActive(item.path) ? "text-blue-600" : "text-gray-500"}>{item.icon}</span>
+                              <span>{item.name}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <button
+                onClick={toggleSar}
+                className={`w-full flex items-center gap-3 px-5 py-2.5 text-[14px] font-medium
+                  transition-all duration-200 border-r-[3px]
+                  ${
+                    isSarRoute
+                      ? "bg-blue-50 text-blue-600 border-blue-600"
+                      : "text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900"
+                  }
+                `}
+              >
+                <span className={isSarRoute ? "text-blue-600" : "text-gray-500"}>{Icons.document}</span>
+                <span className="flex-1 text-left">SAR</span>
+                <span className={isSarRoute ? "text-blue-600" : "text-gray-400"}>
+                  {sarOpen ? Icons.chevronDown : Icons.chevronRight}
+                </span>
+              </button>
+
+              {sarOpen && (
+                <div className="mt-0.5 space-y-0.5">
+                  <Link
+                    to="/sar/part-a"
+                    onClick={() => setIsOpen(false)}
+                    className={`
+                      flex items-center gap-3 pl-12 pr-5 py-2 text-[13px] font-medium
+                      transition-all duration-200 border-r-[3px]
+                      ${
+                        isActive("/sar/part-a")
+                          ? "bg-blue-50 text-blue-600 border-blue-600"
+                          : "text-gray-500 border-transparent hover:bg-gray-50 hover:text-gray-800"
+                      }
+                    `}
+                  >
+                    <span className={isActive("/sar/part-a") ? "text-blue-600" : "text-gray-500"}>{Icons.document}</span>
+                    <span>Part-A</span>
+                  </Link>
+
+                  <div>
+                    <button
+                      onClick={() => setPartBOpen(!partBOpen)}
+                      className={`w-full flex items-center gap-3 pl-12 pr-5 py-2 text-[13px] font-medium
                         transition-all duration-200 border-r-[3px]
                         ${
-                          isActive(item.path)
+                          location.pathname.startsWith("/sar/part-b")
                             ? "bg-blue-50 text-blue-600 border-blue-600"
-                            : "text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900"
+                            : "text-gray-500 border-transparent hover:bg-gray-50 hover:text-gray-800"
                         }
                       `}
                     >
-                      <span className={isActive(item.path) ? "text-blue-600" : "text-gray-500"}>
-                        {item.icon}
+                      <span className={location.pathname.startsWith("/sar/part-b") ? "text-blue-600" : "text-gray-500"}>
+                        {Icons.clipboardList}
                       </span>
-                      <span>{item.name}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                      <span className="flex-1 text-left">Part-B</span>
+                      <span className={location.pathname.startsWith("/sar/part-b") ? "text-blue-600" : "text-gray-400"}>
+                        {partBOpen ? Icons.chevronDown : Icons.chevronRight}
+                      </span>
+                    </button>
+
+                    {partBOpen && (
+                      <ul className="mt-0.5 space-y-0.5">
+                        {sarCriteria.map((item, idx) => (
+                          <li key={idx}>
+                            <Link
+                              to={item.path}
+                              onClick={() => setIsOpen(false)}
+                              className={`
+                                flex items-center gap-3 pl-16 pr-5 py-2 text-[13px] font-medium
+                                transition-all duration-200 border-r-[3px]
+                                ${
+                                  isActive(item.path)
+                                    ? "bg-blue-50 text-blue-600 border-blue-600"
+                                    : "text-gray-500 border-transparent hover:bg-gray-50 hover:text-gray-800"
+                                }
+                              `}
+                            >
+                              <span>{item.name}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
+          </div>
         </nav>
 
         {/* Logout Button */}

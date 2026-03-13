@@ -14,6 +14,10 @@ import FacultyByDepartment from "./pages/FacultyByDepartment";
 import FacultyByAllied from "./pages/FacultyByAllied";
 import RatioByDepartment from "./pages/RatioByDepartment";
 import RatioByAllied from "./pages/RatioByAllied";
+import StudentsByDepartment from "./pages/StudentsByDepartment";
+import StudentsByAllied from "./pages/StudentsByAllied";
+import SARPartA from "./pages/SARPartA";
+import SARCriteria from "./pages/SARCriteria";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
 import useAuthStore from "./store/authStore";
@@ -92,6 +96,22 @@ function App() {
           }
         />
         <Route
+          path="/students-department"
+          element={
+            <ProtectedRoute>
+              <StudentsByDepartment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/students-allied"
+          element={
+            <ProtectedRoute>
+              <StudentsByAllied />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/ratio-department"
           element={
             <ProtectedRoute>
@@ -104,6 +124,22 @@ function App() {
           element={
             <ProtectedRoute>
               <RatioByAllied />
+                    <Route
+                      path="/sar/part-a"
+                      element={
+                        <ProtectedRoute>
+                          <SARPartA />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/sar/part-b/criteria-:num"
+                      element={
+                        <ProtectedRoute>
+                          <SARCriteria />
+                        </ProtectedRoute>
+                      }
+                    />
             </ProtectedRoute>
           }
         />
