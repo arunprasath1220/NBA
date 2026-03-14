@@ -13,6 +13,26 @@ const yearToStudyNumber = {
   "4th Year": 4,
 };
 
+const parseAcademicYearStart = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    const start = Number.parseInt(raw.slice(0, 4), 10);
+    const yy = Number.parseInt(raw.slice(5, 7), 10);
+    if ((start + 1) % 100 !== yy) return null;
+    return start;
+  }
+
+  if (/^\d{4}$/.test(raw)) {
+    return Number.parseInt(raw, 10);
+  }
+
+  return null;
+};
+
+const formatAcademicYear = (startYear) => `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+
 const StudentsByDepartment = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, isAdmin } = useAuthStore();
@@ -34,6 +54,23 @@ const StudentsByDepartment = () => {
     "3rd Year": "",
     "4th Year": "",
   });
+
+  const academicYearLabels = useMemo(() => {
+    const startYear = parseAcademicYearStart(selectedAcademicYear);
+    if (startYear === null) {
+      return {
+        cay: "-",
+        caym1: "-",
+        caym2: "-",
+      };
+    }
+
+    return {
+      cay: formatAcademicYear(startYear),
+      caym1: formatAcademicYear(startYear - 1),
+      caym2: formatAcademicYear(startYear - 2),
+    };
+  }, [selectedAcademicYear]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -273,56 +310,144 @@ const StudentsByDepartment = () => {
                     <h2 className="text-base font-semibold text-gray-900 uppercase tracking-wide">
                       {department.department_name}
                     </h2>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-[1200px] w-full text-left text-xs border-collapse border border-gray-300">
-                        <thead>
-                          <tr>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Program</th>
-                            <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">2nd Year</th>
-                            <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">3rd Year</th>
-                            <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">4th Year</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sub-Total (Sanction)</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sub-Total (Actual)</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Total</th>
-                          </tr>
-                          <tr>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Academic Year</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Sanction</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Actual</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Sanction</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Actual</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Sanction</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">Actual</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">-</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">-</th>
-                            <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-white text-gray-800">-</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white">
-                          {(department.programs || []).map((program) => {
-                            const second = getStudyYearValues(program.rows, 2);
-                            const third = getStudyYearValues(program.rows, 3);
-                            const fourth = getStudyYearValues(program.rows, 4);
-                            const sanctionSubtotal = second.sanction + third.sanction + fourth.sanction;
-                            const actualSubtotal = second.actual + third.actual + fourth.actual;
+                    <div className="space-y-4">
+                      {(department.programs || []).map((program) => {
+                        const second = getStudyYearValues(program.rows, 2);
+                        const third = getStudyYearValues(program.rows, 3);
+                        const fourth = getStudyYearValues(program.rows, 4);
 
-                            return (
-                              <tr key={program.program_id} className="hover:bg-gray-50">
-                                <td className="px-3 py-3 border border-gray-300 font-medium text-gray-900">{program.program_name}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{second.sanction}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{second.actual}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{third.sanction}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{third.actual}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{fourth.sanction}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{fourth.actual}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">{sanctionSubtotal}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">{actualSubtotal}</td>
-                                <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-100">{sanctionSubtotal + actualSubtotal}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                        const rowMatrix = {
+                          "2nd Year": {
+                            cay: second,
+                            caym1: { sanction: 0, actual: 0 },
+                            caym2: { sanction: 0, actual: 0 },
+                          },
+                          "3rd Year": {
+                            cay: { sanction: 0, actual: 0 },
+                            caym1: third,
+                            caym2: { sanction: 0, actual: 0 },
+                          },
+                          "4th Year": {
+                            cay: { sanction: 0, actual: 0 },
+                            caym1: { sanction: 0, actual: 0 },
+                            caym2: fourth,
+                          },
+                        };
+
+                        const yearRows = ["2nd Year", "3rd Year", "4th Year"];
+
+                        const caySanctionSubtotal = yearRows.reduce((sum, label) => sum + rowMatrix[label].cay.sanction, 0);
+                        const cayActualSubtotal = yearRows.reduce((sum, label) => sum + rowMatrix[label].cay.actual, 0);
+                        const caym1SanctionSubtotal = yearRows.reduce((sum, label) => sum + rowMatrix[label].caym1.sanction, 0);
+                        const caym1ActualSubtotal = yearRows.reduce((sum, label) => sum + rowMatrix[label].caym1.actual, 0);
+                        const caym2SanctionSubtotal = yearRows.reduce((sum, label) => sum + rowMatrix[label].caym2.sanction, 0);
+                        const caym2ActualSubtotal = yearRows.reduce((sum, label) => sum + rowMatrix[label].caym2.actual, 0);
+
+                        return (
+                          <div key={program.program_id} className="overflow-x-auto rounded-lg border border-gray-300">
+                            <table className="min-w-[1200px] w-full text-left text-xs border-collapse border border-gray-300">
+                              <thead>
+                                <tr>
+                                  <th
+                                    colSpan={7}
+                                    className="px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900"
+                                  >
+                                    Name of the Program <span className="font-bold">{program.program_name}</span>
+                                  </th>
+                                </tr>
+                                <tr>
+                                  <th
+                                    rowSpan={3}
+                                    className="w-[140px] px-3 py-3 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900 align-top"
+                                  >
+                                    Year of Study
+                                  </th>
+                                  <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">CAY</th>
+                                  <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">CAYm1</th>
+                                  <th colSpan={2} className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">CAYm2</th>
+                                </tr>
+                                <tr>
+                                  <th colSpan={2} className="px-3 py-3 border border-gray-300 text-center bg-white font-semibold text-gray-900">{academicYearLabels.cay}</th>
+                                  <th colSpan={2} className="px-3 py-3 border border-gray-300 text-center bg-white font-semibold text-gray-900">{academicYearLabels.caym1}</th>
+                                  <th colSpan={2} className="px-3 py-3 border border-gray-300 text-center bg-white font-semibold text-gray-900">{academicYearLabels.caym2}</th>
+                                </tr>
+                                <tr>
+                                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sanction Intake</th>
+                                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Actual admitted in Lateral Entry</th>
+                                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sanction Intake</th>
+                                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Actual admitted in Lateral Entry</th>
+                                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Sanction Intake</th>
+                                  <th className="px-3 py-2 border border-gray-300 font-semibold text-center bg-amber-100 text-gray-900">Actual admitted in Lateral Entry</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white">
+                                <tr>
+                                  <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-white">2nd Year</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["2nd Year"].cay.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["2nd Year"].cay.actual}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["2nd Year"].caym1.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["2nd Year"].caym1.actual}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["2nd Year"].caym2.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["2nd Year"].caym2.actual}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-white">3rd Year</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["3rd Year"].cay.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["3rd Year"].cay.actual}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["3rd Year"].caym1.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["3rd Year"].caym1.actual}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["3rd Year"].caym2.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["3rd Year"].caym2.actual}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-white">4th Year</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["4th Year"].cay.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["4th Year"].cay.actual}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["4th Year"].caym1.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["4th Year"].caym1.actual}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["4th Year"].caym2.sanction}</td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center text-gray-700">{rowMatrix["4th Year"].caym2.actual}</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-amber-50">
+                                    Sub-Total
+                                  </td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
+                                    {caySanctionSubtotal}
+                                  </td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
+                                    {cayActualSubtotal}
+                                  </td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
+                                    {caym1SanctionSubtotal}
+                                  </td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
+                                    {caym1ActualSubtotal}
+                                  </td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
+                                    {caym2SanctionSubtotal}
+                                  </td>
+                                  <td className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-50">
+                                    {caym2ActualSubtotal}
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="px-3 py-3 border border-gray-300 font-semibold text-gray-900 bg-amber-50">Total</td>
+                                  <td colSpan={2} className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-100">
+                                    {caySanctionSubtotal + cayActualSubtotal}
+                                  </td>
+                                  <td colSpan={2} className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-100">
+                                    {caym1SanctionSubtotal + caym1ActualSubtotal}
+                                  </td>
+                                  <td colSpan={2} className="px-3 py-3 border border-gray-300 text-center font-semibold text-gray-800 bg-gray-100">
+                                    {caym2SanctionSubtotal + caym2ActualSubtotal}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
