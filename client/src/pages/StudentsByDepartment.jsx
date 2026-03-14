@@ -48,7 +48,11 @@ const StudentsByDepartment = () => {
   const [isLoadingSummaryData, setIsLoadingSummaryData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: "", message: "" });
-  const [departmentSummaries, setDepartmentSummaries] = useState([]);
+  const [departmentSummariesByWindow, setDepartmentSummariesByWindow] = useState({
+    cay: [],
+    caym1: [],
+    caym2: [],
+  });
   const [actualAdmissions, setActualAdmissions] = useState({
     "2nd Year": "",
     "3rd Year": "",
@@ -151,29 +155,52 @@ const StudentsByDepartment = () => {
   useEffect(() => {
     const fetchDepartmentSummary = async () => {
       if (!selectedAcademicYear?.trim()) {
-        setDepartmentSummaries([]);
+        setDepartmentSummariesByWindow({ cay: [], caym1: [], caym2: [] });
         return;
       }
 
+      const startYear = parseAcademicYearStart(selectedAcademicYear.trim());
+      if (startYear === null) {
+        setDepartmentSummariesByWindow({ cay: [], caym1: [], caym2: [] });
+        return;
+      }
+
+      const requestYears = {
+        cay: formatAcademicYear(startYear),
+        caym1: formatAcademicYear(startYear - 1),
+        caym2: formatAcademicYear(startYear - 2),
+      };
+
       setIsLoadingSummaryData(true);
       try {
-        const params = new URLSearchParams({
-          academic_year: selectedAcademicYear.trim(),
+        const fetchByAcademicYear = async (academicYear) => {
+          const params = new URLSearchParams({ academic_year: academicYear });
+          const response = await fetch(`http://localhost:5000/api/student-by-department?${params.toString()}`, {
+            credentials: "include",
+          });
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || "Failed to load student by department summary");
+          }
+
+          return data.data?.departments || [];
+        };
+
+        const [cayDepartments, caym1Departments, caym2Departments] = await Promise.all([
+          fetchByAcademicYear(requestYears.cay),
+          fetchByAcademicYear(requestYears.caym1),
+          fetchByAcademicYear(requestYears.caym2),
+        ]);
+
+        setDepartmentSummariesByWindow({
+          cay: cayDepartments,
+          caym1: caym1Departments,
+          caym2: caym2Departments,
         });
-
-        const response = await fetch(`http://localhost:5000/api/student-by-department?${params.toString()}`, {
-          credentials: "include",
-        });
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Failed to load student by department summary");
-        }
-
-        setDepartmentSummaries(data.data?.departments || []);
       } catch (error) {
         console.error("Error loading department student summary:", error);
-        setDepartmentSummaries([]);
+        setDepartmentSummariesByWindow({ cay: [], caym1: [], caym2: [] });
       } finally {
         setIsLoadingSummaryData(false);
       }
@@ -189,6 +216,25 @@ const StudentsByDepartment = () => {
       actual: Number(yearRow?.actual_lateral_admitted || 0),
     };
   };
+
+  const summaryProgramLookupByWindow = useMemo(() => {
+    const toLookup = (departments = []) => {
+      const lookup = new Map();
+      departments.forEach((department) => {
+        const departmentName = String(department.department_name || "").trim();
+        (department.programs || []).forEach((program) => {
+          lookup.set(`${departmentName}::${program.program_id}`, program);
+        });
+      });
+      return lookup;
+    };
+
+    return {
+      cay: toLookup(departmentSummariesByWindow.cay),
+      caym1: toLookup(departmentSummariesByWindow.caym1),
+      caym2: toLookup(departmentSummariesByWindow.caym2),
+    };
+  }, [departmentSummariesByWindow]);
 
   const totals = useMemo(() => {
     const actualSubtotal = studyYears.reduce(
@@ -305,32 +351,43 @@ const StudentsByDepartment = () => {
 
             {!showForm ? (
               <section className="w-full space-y-6">
-                {departmentSummaries.map((department) => (
+                {departmentSummariesByWindow.cay.map((department) => {
+                  const visiblePrograms = selectedProgramId
+                    ? (department.programs || []).filter(
+                        (p) => Number(p.program_id) === Number(selectedProgramId)
+                      )
+                    : (department.programs || []);
+
+                  if (visiblePrograms.length === 0) return null;
+
+                  return (
                   <div key={department.department_name} className="space-y-2">
                     <h2 className="text-base font-semibold text-gray-900 uppercase tracking-wide">
                       {department.department_name}
                     </h2>
                     <div className="space-y-4">
-                      {(department.programs || []).map((program) => {
-                        const second = getStudyYearValues(program.rows, 2);
-                        const third = getStudyYearValues(program.rows, 3);
-                        const fourth = getStudyYearValues(program.rows, 4);
+                      {visiblePrograms.map((program) => {
+                        const lookupKey = `${department.department_name}::${program.program_id}`;
+
+                        const programCay = summaryProgramLookupByWindow.cay.get(lookupKey) || program;
+                        const programCaym1 = summaryProgramLookupByWindow.caym1.get(lookupKey);
+                        const programCaym2 = summaryProgramLookupByWindow.caym2.get(lookupKey);
 
                         const rowMatrix = {
                           "2nd Year": {
-                            cay: second,
-                            caym1: { sanction: 0, actual: 0 },
-                            caym2: { sanction: 0, actual: 0 },
+                            cay: getStudyYearValues(programCay?.rows || [], 2),
+                            caym1: getStudyYearValues(programCaym1?.rows || [], 2),
+                            caym2: getStudyYearValues(programCaym2?.rows || [], 2),
                           },
                           "3rd Year": {
-                            cay: { sanction: 0, actual: 0 },
-                            caym1: third,
-                            caym2: { sanction: 0, actual: 0 },
+                            cay: getStudyYearValues(programCay?.rows || [], 3),
+                            caym1: getStudyYearValues(programCaym1?.rows || [], 3),
+                            caym2: getStudyYearValues(programCaym2?.rows || [], 3),
                           },
                           "4th Year": {
-                            cay: { sanction: 0, actual: 0 },
-                            caym1: { sanction: 0, actual: 0 },
-                            caym2: fourth,
+                            cay: getStudyYearValues(programCay?.rows || [], 4),
+                            caym1: getStudyYearValues(programCaym1?.rows || [], 4),
+                            caym2: getStudyYearValues(programCaym2?.rows || [], 4),
                           },
                         };
 
@@ -450,7 +507,8 @@ const StudentsByDepartment = () => {
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600">
@@ -458,7 +516,7 @@ const StudentsByDepartment = () => {
                       ? "Loading department-wise student details..."
                       : !selectedAcademicYear
                         ? "Select Academic Year from the top global filter."
-                        : departmentSummaries.length === 0
+                        : departmentSummariesByWindow.cay.length === 0
                           ? "No department data found for selected academic year."
                           : "Showing all courses grouped by department for selected academic year."}
                   </p>
