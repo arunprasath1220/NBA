@@ -145,7 +145,7 @@ const RatioByDepartment = () => {
 
   const effectiveFacultyProgramId = selectedProgramRecord?.programNameId
     ? String(selectedProgramRecord.programNameId)
-    : String(selectedProgramId || "");
+    : "";
 
   useEffect(() => {
     const fetchTableData = async () => {
@@ -164,6 +164,30 @@ const RatioByDepartment = () => {
           CAYm1: academicYearLabels.CAYm1,
           CAYm2: academicYearLabels.CAYm2,
         };
+
+        let facultyProgramIdentifier = effectiveFacultyProgramId;
+        if (!facultyProgramIdentifier) {
+          const coursesResponse = await fetch("http://localhost:5000/api/institute/courses", {
+            credentials: "include",
+          });
+          const coursesData = await coursesResponse.json();
+
+          if (!coursesResponse.ok || !coursesData.success) {
+            throw new Error(coursesData.error || "Failed to resolve program mapping");
+          }
+
+          const matchedCourse = (coursesData.data || []).find(
+            (course) => String(course.id) === String(selectedProgramId),
+          );
+
+          facultyProgramIdentifier = matchedCourse?.programNameId
+            ? String(matchedCourse.programNameId)
+            : "";
+        }
+
+        if (!facultyProgramIdentifier) {
+          throw new Error("Unable to resolve selected program for faculty stats");
+        }
 
         const fetchStudentSummaryByYear = async (yearLabel) => {
           const params = new URLSearchParams({ academic_year: yearLabel });
@@ -194,7 +218,7 @@ const RatioByDepartment = () => {
         }
 
         const facultyStatsParams = new URLSearchParams({
-          program_id: effectiveFacultyProgramId,
+          program_id: facultyProgramIdentifier,
           academicYear: requestYears.CAY,
         });
         const facultyStatsResponse = await fetch(
@@ -349,6 +373,7 @@ const RatioByDepartment = () => {
     academicYearLabels.startYear,
     effectiveFacultyProgramId,
     selectedProgramId,
+    selectedProgramRecord?.programNameId,
     selectedProgramRecord?.departmentName,
   ]);
 
