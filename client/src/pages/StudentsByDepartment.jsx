@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import useAuthStore from "../store/authStore";
 import useFilterStore from "../store/filterStore";
 import Navbar from "../components/Navbar";
@@ -321,6 +324,161 @@ const StudentsByDepartment = () => {
     }
   };
 
+  const downloadExcel = () => {
+    const hasData = departmentSummariesByWindow.cay.length > 0;
+    if (!hasData) {
+      alert("No student data to export.");
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    departmentSummariesByWindow.cay.forEach((department) => {
+      const visiblePrograms = selectedProgramId
+        ? (department.programs || []).filter((p) => Number(p.program_id) === Number(selectedProgramId))
+        : (department.programs || []);
+      if (visiblePrograms.length === 0) return;
+
+      const rows = [];
+      visiblePrograms.forEach((program) => {
+        const lookupKey = `${department.department_name}::${program.program_id}`;
+        const programCay = summaryProgramLookupByWindow.cay.get(lookupKey) || program;
+        const programCaym1 = summaryProgramLookupByWindow.caym1.get(lookupKey);
+        const programCaym2 = summaryProgramLookupByWindow.caym2.get(lookupKey);
+
+        ["2nd Year", "3rd Year", "4th Year"].forEach((yLabel, idx) => {
+          const yn = idx + 2;
+          const cay = getStudyYearValues(programCay?.rows || [], yn);
+          const caym1 = getStudyYearValues(programCaym1?.rows || [], yn);
+          const caym2 = getStudyYearValues(programCaym2?.rows || [], yn);
+          rows.push({
+            Department: department.department_name,
+            Program: program.program_name,
+            "Year of Study": yLabel,
+            [`CAY (${academicYearLabels.cay}) Sanction`]: cay.sanction,
+            [`CAY (${academicYearLabels.cay}) Actual`]: cay.actual,
+            [`CAYm1 (${academicYearLabels.caym1}) Sanction`]: caym1.sanction,
+            [`CAYm1 (${academicYearLabels.caym1}) Actual`]: caym1.actual,
+            [`CAYm2 (${academicYearLabels.caym2}) Sanction`]: caym2.sanction,
+            [`CAYm2 (${academicYearLabels.caym2}) Actual`]: caym2.actual,
+          });
+        });
+      });
+
+      if (rows.length === 0) return;
+      const sheetName = (department.department_name || "Dept")
+        .replace(/[\\\/?*[\]:]/g, "")
+        .trim()
+        .slice(0, 28) || "Data";
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!cols"] = [
+        { wch: 28 }, { wch: 28 }, { wch: 14 },
+        { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    });
+
+    XLSX.writeFile(workbook, "Student_Details_By_Department.xlsx");
+  };
+
+  const downloadPDF = () => {
+    const hasData = departmentSummariesByWindow.cay.length > 0;
+    if (!hasData) {
+      alert("No student data to export.");
+      return;
+    }
+
+    const doc = new jsPDF("landscape");
+    let isFirstTable = true;
+
+    departmentSummariesByWindow.cay.forEach((department) => {
+      const visiblePrograms = selectedProgramId
+        ? (department.programs || []).filter((p) => Number(p.program_id) === Number(selectedProgramId))
+        : (department.programs || []);
+      if (visiblePrograms.length === 0) return;
+
+      visiblePrograms.forEach((program) => {
+        if (!isFirstTable) doc.addPage();
+        isFirstTable = false;
+
+        const lookupKey = `${department.department_name}::${program.program_id}`;
+        const programCay = summaryProgramLookupByWindow.cay.get(lookupKey) || program;
+        const programCaym1 = summaryProgramLookupByWindow.caym1.get(lookupKey);
+        const programCaym2 = summaryProgramLookupByWindow.caym2.get(lookupKey);
+
+        const yearRowsData = ["2nd Year", "3rd Year", "4th Year"].map((yLabel, idx) => {
+          const yn = idx + 2;
+          const cay = getStudyYearValues(programCay?.rows || [], yn);
+          const caym1 = getStudyYearValues(programCaym1?.rows || [], yn);
+          const caym2 = getStudyYearValues(programCaym2?.rows || [], yn);
+          return { yLabel, cay, caym1, caym2 };
+        });
+
+        const caySancSub = yearRowsData.reduce((s, r) => s + r.cay.sanction, 0);
+        const cayActSub = yearRowsData.reduce((s, r) => s + r.cay.actual, 0);
+        const caym1SancSub = yearRowsData.reduce((s, r) => s + r.caym1.sanction, 0);
+        const caym1ActSub = yearRowsData.reduce((s, r) => s + r.caym1.actual, 0);
+        const caym2SancSub = yearRowsData.reduce((s, r) => s + r.caym2.sanction, 0);
+        const caym2ActSub = yearRowsData.reduce((s, r) => s + r.caym2.actual, 0);
+
+        let startY = 15;
+        doc.setFontSize(12);
+        doc.text(`Department: ${department.department_name}`, 14, startY);
+        doc.setFontSize(10);
+        doc.text(`Program: ${program.program_name}`, 14, startY + 6);
+        if (selectedAcademicYear) {
+          doc.text(`Academic Year (CAY): ${selectedAcademicYear}`, 14, startY + 12);
+          startY += 20;
+        } else {
+          startY += 14;
+        }
+
+        autoTable(doc, {
+          head: [
+            [
+              { content: "Year of Study", rowSpan: 3, styles: { halign: "center", valign: "middle" } },
+              { content: "CAY", colSpan: 2, styles: { halign: "center" } },
+              { content: "CAYm1", colSpan: 2, styles: { halign: "center" } },
+              { content: "CAYm2", colSpan: 2, styles: { halign: "center" } },
+            ],
+            [
+              { content: academicYearLabels.cay, colSpan: 2, styles: { halign: "center" } },
+              { content: academicYearLabels.caym1, colSpan: 2, styles: { halign: "center" } },
+              { content: academicYearLabels.caym2, colSpan: 2, styles: { halign: "center" } },
+            ],
+            [
+              { content: "Sanction", styles: { halign: "center" } },
+              { content: "Actual", styles: { halign: "center" } },
+              { content: "Sanction", styles: { halign: "center" } },
+              { content: "Actual", styles: { halign: "center" } },
+              { content: "Sanction", styles: { halign: "center" } },
+              { content: "Actual", styles: { halign: "center" } },
+            ],
+          ],
+          body: [
+            ...yearRowsData.map((r) => [
+              r.yLabel,
+              r.cay.sanction, r.cay.actual,
+              r.caym1.sanction, r.caym1.actual,
+              r.caym2.sanction, r.caym2.actual,
+            ]),
+            ["Sub-Total", caySancSub, cayActSub, caym1SancSub, caym1ActSub, caym2SancSub, caym2ActSub],
+            ["Total", { content: caySancSub + cayActSub, colSpan: 2, styles: { halign: "center" } },
+              { content: caym1SancSub + caym1ActSub, colSpan: 2, styles: { halign: "center" } },
+              { content: caym2SancSub + caym2ActSub, colSpan: 2, styles: { halign: "center" } }],
+          ],
+          startY,
+          styles: { fontSize: 9, cellPadding: 2.5, lineColor: [209, 213, 219], lineWidth: 0.1 },
+          headStyles: { fillColor: [254, 243, 199], textColor: [17, 24, 39], fontStyle: "bold" },
+          bodyStyles: { textColor: [55, 65, 81] },
+          theme: "grid",
+        });
+      });
+    });
+
+    doc.save("Student_Details_By_Department.pdf");
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -338,15 +496,41 @@ const StudentsByDepartment = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h1 className="text-xl font-semibold text-gray-800">Student Details by Department</h1>
-              {isAdmin() && (
-                <button
-                  type="button"
-                  onClick={() => setShowForm((prev) => !prev)}
-                  className="self-start rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-                >
-                  {showForm ? "Close Entry" : "Student by Department"}
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {!showForm && departmentSummariesByWindow.cay.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={downloadExcel}
+                      className="text-green-600 hover:text-green-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadPDF}
+                      className="text-red-600 hover:text-red-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      PDF
+                    </button>
+                  </>
+                )}
+                {isAdmin() && (
+                  <button
+                    type="button"
+                    onClick={() => setShowForm((prev) => !prev)}
+                    className="self-start rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    {showForm ? "Close Entry" : "Student by Department"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {!showForm ? (
