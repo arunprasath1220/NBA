@@ -12,7 +12,7 @@ const API_URL = "http://localhost:5000/api";
 
 const ACCREDITATION_OPTIONS = [
   "Applying first time",
-  "Granted provisional accreditation for two years for the period (specify period)",
+  "Granted provisional accreditation for two years for the period(specify period)",
   "Granted accreditation for 5 years for the period (specify period)",
   "Granted accreditation for 3 years for the period (specify period)",
   "Not accredited (specify visit dates, year)",
@@ -21,7 +21,7 @@ const ACCREDITATION_OPTIONS = [
   "Eligible but not applied",
 ];
 
-const PROGRAM_CONSIDERATION_OPTIONS = ["Yes (For applying course)", "No"];
+const PROGRAM_CONSIDERATION_OPTIONS = ["Yes", "No"];
 
 const PartA = () => {
   const navigate = useNavigate();
@@ -44,7 +44,6 @@ const PartA = () => {
     { key: "accreditation", label: "Accreditation" },
     { key: "faculty", label: "Faculty" },
     { key: "students", label: "Students" },
-    { key: "visionMission", label: "Vision & Mission" },
     { key: "contacts", label: "Contacts" },
   ];
 
@@ -68,9 +67,6 @@ const PartA = () => {
   // Section 10 - Student strength by department (manual data)
   const [deptStudents, setDeptStudents] = useState([]);
 
-  // Section 11 & 12 - Vision and Mission
-  const [vision, setVision] = useState("");
-  const [mission, setMission] = useState([]);
 
   // Section 13 - Contact info
   const [headContact, setHeadContact] = useState({
@@ -166,7 +162,6 @@ const PartA = () => {
           if (parsed.programExtras) setProgramExtras(parsed.programExtras);
           if (parsed.deptFaculty) setDeptFaculty(parsed.deptFaculty);
           if (parsed.deptStudents) setDeptStudents(parsed.deptStudents);
-          if (parsed.vision) setVision(parsed.vision);
           if (parsed.mission) setMission(parsed.mission);
           if (parsed.nbaCoordinator) setNbaCoordinator(parsed.nbaCoordinator);
         } catch (e) {
@@ -186,8 +181,6 @@ const PartA = () => {
       programExtras,
       deptFaculty,
       deptStudents,
-      vision,
-      mission,
       nbaCoordinator,
     };
     localStorage.setItem("partA_data", JSON.stringify(data));
@@ -216,7 +209,7 @@ const PartA = () => {
     if (!isLoadingData) {
       saveLocal();
     }
-  }, [programExtras, deptFaculty, deptStudents, vision, mission, nbaCoordinator]);
+  }, [programExtras, deptFaculty, deptStudents,nbaCoordinator]);
 
   // ---- Helpers ----
 
@@ -391,6 +384,92 @@ const PartA = () => {
         return yearEnd >= startYear - 2 && yearEnd <= startYear;
       })
     : courses;
+  // Resolve the selected course robustly. Top bar may supply either an all_program id
+  // or a program-name id / label depending on which component loaded the list.
+  const resolvedSelectedCourse = (() => {
+    if (!selectedProgramId && !selectedProgramLabel) return null;
+
+    // First, try to find courses where the selectedProgramId is a programNameId
+    // (TopBar may supply a program_name id). Prefer these candidates over a direct
+    // all_program id match to avoid picking the wrong course when ids overlap.
+    const candidates = filteredCourses.filter((c) => String(c.programNameId) === String(selectedProgramId));
+    if (candidates.length === 1) return candidates[0];
+    if (candidates.length === 1) return candidates[0];
+
+    if (candidates.length > 1) {
+      // If multiple all_program rows share the same programNameId, try to pick the one that
+      // appears in alliedMappings (i.e., part of a mapped group). Prefer a group where
+      // one of the mapping.programId matches a candidate course id.
+      const candidateIds = new Set(candidates.map((c) => String(c.id)));
+      for (const g of alliedMappings) {
+        if (!g.programs) continue;
+        const mappedIds = g.programs.map((p) => String(p.programId));
+        const intersect = mappedIds.find((id) => candidateIds.has(id));
+        if (intersect) {
+          // find the course matching the mainProgram if available, else the intersecting one
+          const mainId = g.mainProgram?.programId ? String(g.mainProgram.programId) : null;
+          const byMain = candidates.find((c) => mainId && String(c.id) === mainId);
+          if (byMain) return byMain;
+          const byIntersect = candidates.find((c) => String(c.id) === intersect);
+          if (byIntersect) return byIntersect;
+        }
+      }
+
+      // If still ambiguous, try to prefer the candidate active in the selectedAcademicYear
+      if (selectedAcademicYear) {
+        const sy = parseInt(selectedAcademicYear.split("-")[0]);
+        const byYear = candidates.find((c) => {
+          const ys = c.yearStart ? parseInt(c.yearStart) : null;
+          const ye = c.yearEnd ? parseInt(c.yearEnd) : null;
+          return (ys === null || ys <= sy) && (ye === null || ye >= sy);
+        });
+        if (byYear) return byYear;
+      }
+
+      // Try to match by selectedProgramLabel using tokenized, case-insensitive heuristics
+      if (selectedProgramLabel) {
+        const normalize = (s) => (s || "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+        const stripParen = (s) => (s || "").toString().split("(")[0].trim();
+        const target = normalize(stripParen(selectedProgramLabel));
+        if (target) {
+          // exact normalized match
+          const exact = candidates.find((c) => normalize(stripParen(c.programName || c.coursename)) === target);
+          if (exact) return exact;
+
+          // token-based: require all non-trivial tokens in target to appear in candidate name
+          const tokens = target.split(" ").filter((t) => t.length > 2);
+          if (tokens.length > 0) {
+            const byTokens = candidates.find((c) => {
+              const name = normalize(stripParen(c.programName || c.coursename));
+              return tokens.every((tk) => name.includes(tk));
+            });
+            if (byTokens) return byTokens;
+          }
+        }
+      }
+
+      // Fallback to first candidate
+      return candidates[0];
+    }
+
+    // If no programNameId candidates matched, try to find by all_program id
+    let found = filteredCourses.find((c) => String(c.id) === String(selectedProgramId));
+    if (found) return found;
+
+    // Try matching by program name label as last resort
+    if (selectedProgramLabel) {
+      found = filteredCourses.find((c) => (c.programName && c.programName === selectedProgramLabel) || (c.coursename && c.coursename === selectedProgramLabel));
+      if (found) return found;
+    }
+
+    return null;
+  })();
+
+  const sanctionedIntakeCourses = resolvedSelectedCourse
+    ? [resolvedSelectedCourse]
+    : selectedProgramId
+    ? filteredCourses.filter((course) => String(course.id) === String(selectedProgramId))
+    : [];
 
   // Get year labels for CAY, CAYm1, CAYm2
   const getCAYLabels = () => {
@@ -424,19 +503,29 @@ const PartA = () => {
     "border border-blue-700 px-4 py-3 text-left text-sm font-semibold";
   const labelCellClass =
     "border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-50";
+  const tabLargeClass = "mb-8 min-h-[calc(100vh-190px)]";
+  const cellClassLg = "border border-gray-300 px-4 py-3 text-base";
+  const headerCellClassLg =
+    "border border-blue-700 px-4 py-3 text-left text-base font-semibold";
+  const labelCellClassLg =
+    "border border-gray-300 px-4 py-3 text-base font-semibold text-gray-700 bg-gray-50";
+  const inputClassLg = isEditing
+    ? "w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-base"
+    : "w-full bg-transparent border-none outline-none text-base text-gray-900 cursor-default pointer-events-none";
+  const selectClass = "w-full min-w-[220px] px-3 py-2 border border-gray-300 rounded-md outline-none text-sm text-gray-900 bg-white shadow-sm cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <div className="flex z-2 min-h-screen w-full bg-white">
       <Navbar />
       <TopBar />
       <main className="flex-1 lg:ml-[240px] overflow-x-hidden">
-        <div className="pt-16 lg:pt-14 p-4">
+        <div className="pt-16 lg:pt-14 p-6 ">
           {isLoadingData ? (
             <div className="flex justify-center items-center py-16">
               <div className="w-10 h-10 border-[3px] border-gray-300 border-t-[#0095ff] rounded-full animate-spin"></div>
             </div>
-          ) : (
-            <div>
+            ) : (
+            <div className="w-full block min-w-0">
               {/* Academic Year Display */}
               <div className="mb-3 text-sm text-gray-600">
                 Academic Year:{" "}
@@ -483,7 +572,7 @@ const PartA = () => {
 
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 mb-6">
-                <nav className="flex gap-1 overflow-x-auto" aria-label="Tabs">
+                <nav className="flex gap-1 overflow-x-auto " aria-label="Tabs">
                   {TABS.map((tab) => (
                     <button
                       key={tab.key}
@@ -575,39 +664,6 @@ const PartA = () => {
                 </div>
               </div>
               )}
-
-              {/* ---- Other Academic Institutions ----
-              <div className="mb-8">
-                <p className="text-base font-semibold text-gray-800 mb-2">
-                  Other Academic Institutions of the Trust/Society/Company
-                  etc., if any
-                </p>
-                <table className="w-full border-collapse border border-gray-300">
-                  <thead>
-                    <tr className="bg-blue-600 text-white">
-                      <th className={`${headerCellClass} w-16`}>S. No.</th>
-                      <th className={headerCellClass}>
-                        Name of the Institution(s)
-                      </th>
-                      <th className={headerCellClass}>
-                        Year of Establishment
-                      </th>
-                      <th className={headerCellClass}>Programs of Study</th>
-                      <th className={headerCellClass}>Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="border border-gray-300 px-3 py-2 text-sm text-gray-500 text-center"
-                      >
-                        Not applicable
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div> */}
 
               {/* ---- Tab: Programs ---- */}
               {activeTab === "programs" && (
@@ -751,28 +807,24 @@ const PartA = () => {
                                 )}
                               </td>
                               <td className={cellClass}>
-                                {isEditing ? (
-                                  <select
-                                    value={extras.accreditationStatus}
-                                    onChange={(e) =>
-                                      updateExtras(
-                                        course.id,
-                                        "accreditationStatus",
-                                        e.target.value
-                                      )
-                                    }
-                                    className={inputClass}
-                                  >
-                                    <option value="">--</option>
-                                    {ACCREDITATION_OPTIONS.map((opt) => (
-                                      <option key={opt} value={opt}>
-                                        {opt}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  extras.accreditationStatus || ""
-                                )}
+                                <select
+                                  value={extras.accreditationStatus}
+                                  onChange={(e) =>
+                                    updateExtras(
+                                      course.id,
+                                      "accreditationStatus",
+                                      e.target.value
+                                    )
+                                  }
+                                  className={selectClass}
+                                >
+                                  <option value="">Select accreditation status</option>
+                                  {ACCREDITATION_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
                               </td>
                               <td className={cellClass}>
                                 {isEditing ? (
@@ -813,30 +865,24 @@ const PartA = () => {
                                 )}
                               </td>
                               <td className={cellClass}>
-                                {isEditing ? (
-                                  <select
-                                    value={extras.programForConsideration}
-                                    onChange={(e) =>
-                                      updateExtras(
-                                        course.id,
-                                        "programForConsideration",
-                                        e.target.value
-                                      )
-                                    }
-                                    className={inputClass}
-                                  >
-                                    <option value="">--</option>
-                                    {PROGRAM_CONSIDERATION_OPTIONS.map(
-                                      (opt) => (
-                                        <option key={opt} value={opt}>
-                                          {opt}
-                                        </option>
-                                      )
-                                    )}
-                                  </select>
-                                ) : (
-                                  extras.programForConsideration || ""
-                                )}
+                                <select
+                                  value={extras.programForConsideration}
+                                  onChange={(e) =>
+                                    updateExtras(
+                                      course.id,
+                                      "programForConsideration",
+                                      e.target.value
+                                    )
+                                  }
+                                  className={selectClass}
+                                >
+                                  <option value="">Select Yes or No</option>
+                                  {PROGRAM_CONSIDERATION_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
                               </td>
                               <td className={cellClass}>
                                 {isEditing ? (
@@ -865,192 +911,218 @@ const PartA = () => {
                   </table>
                 </div>
 
-                {/* Sanctioned Intake per program */}
-                {filteredCourses.map((course) => {
-                  const extras = getExtras(course.id);
-                  const yearLabels = getAcademicYearLabels();
-                  if (yearLabels.length === 0) return null;
+                {/* Sanctioned Intake per selected program */}
+                {!selectedProgramId ? (
+                  <div className="mt-4 rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    Select a program in the top bar to view sanctioned intake.
+                  </div>
+                ) : sanctionedIntakeCourses.length === 0 ? (
+                  <div className="mt-4 rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    No sanctioned intake data is available for the selected program.
+                  </div>
+                ) : (
+                  sanctionedIntakeCourses.map((course) => {
+                    const extras = getExtras(course.id);
+                    const yearLabels = getAcademicYearLabels();
+                    if (yearLabels.length === 0) return null;
 
-                  return (
-                    <div key={`intake-${course.id}`} className="mt-4">
-                      <p className="text-sm font-semibold text-gray-700 mb-1 border-b border-gray-200 pb-1">
-                        Sanctioned Intake for Last Five Years for the{" "}
-                        {course.programName}
-                      </p>
-                      <div className="overflow-x-auto">
-                      <table className="w-full border-collapse border border-gray-300">
-                        <thead>
-                          <tr className="bg-blue-600 text-white">
-                            <th className={`${headerCellClass} min-w-[200px]`}>
-                              Academic Year
-                            </th>
-                            <th className={`${headerCellClass} min-w-[200px]`}>
-                              Sanctioned Intake
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {yearLabels.map((yearLabel) => (
-                            <tr key={yearLabel}>
-                              <td className={cellClass}>{yearLabel}</td>
-                              <td className={cellClass}>
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    value={
-                                      extras.sanctionedIntakes?.[yearLabel] ||
-                                      ""
-                                    }
-                                    onChange={(e) =>
-                                      updateSanctionedIntake(
-                                        course.id,
-                                        yearLabel,
-                                        e.target.value
-                                      )
-                                    }
-                                    className={inputClass}
-                                  />
-                                ) : (
-                                  extras.sanctionedIntakes?.[yearLabel] || ""
-                                )}
-                              </td>
+                    return (
+                      <div key={`intake-${course.id}`} className="mt-4">
+                        <p className="text-sm font-semibold text-gray-700 mb-1 border-b border-gray-200 pb-1">
+                          Sanctioned Intake for Last Five Years for the{" "}
+                          {course.programName}
+                        </p>
+                        <div className="overflow-x-auto">
+                        <table className="w-full border-collapse border border-gray-300">
+                          <thead>
+                            <tr className="bg-blue-600 text-white">
+                              <th className={`${headerCellClass} min-w-[200px]`}>
+                                Academic Year
+                              </th>
+                              <th className={`${headerCellClass} min-w-[200px]`}>
+                                Sanctioned Intake
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {yearLabels.map((yearLabel) => (
+                              <tr key={yearLabel}>
+                                <td className={cellClass}>{yearLabel}</td>
+                                <td className={cellClass}>
+                                  {isEditing ? (
+                                    <input
+                                      type="number"
+                                      value={
+                                        extras.sanctionedIntakes?.[yearLabel] ||
+                                        ""
+                                      }
+                                      onChange={(e) =>
+                                        updateSanctionedIntake(
+                                          course.id,
+                                          yearLabel,
+                                          e.target.value
+                                        )
+                                      }
+                                      className={inputClass}
+                                    />
+                                  ) : (
+                                    extras.sanctionedIntakes?.[yearLabel] || ""
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
 
-                {/* Reference notes */}
-                <div className="mt-4 text-xs text-gray-500 space-y-1">
-                  <p>
-                    * Write applicable one: (Drop Down) — Applying first time /
-                    Granted provisional accreditation for two years / Granted
-                    accreditation for 5 years / Granted accreditation for 3 years
-                    / Not accredited / Withdrawn / Not eligible / Eligible but
-                    not applied
-                  </p>
-                  <p>
-                    # — Yes (For applying course) / No
-                  </p>
-                  <p>$ — UG / PG</p>
-                </div>
               </div>
               )}
 
               {/* ---- Tab: Accreditation ---- */}
               {activeTab === "accreditation" && (
-              <div className="mb-8">
-                <p className="text-base font-semibold text-gray-800 mb-2">
+              <div className={tabLargeClass}>
+                <p className="text-lg font-semibold text-gray-800 mb-3">
                   8. Programs to be considered for Accreditation vide this
                   application:
                 </p>
 
                 {/* Table A8.1 */}
-                <p className="text-xs text-gray-600 mb-1">Table No. A8.1</p>
+                <p className="text-sm text-gray-600 mb-2">Table No. A8.1</p>
                 <div className="overflow-x-auto mb-4">
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-blue-600 text-white">
-                      <th className={`${headerCellClass} w-16`}>S No</th>
-                      <th className={headerCellClass}>Level</th>
-                      <th className={headerCellClass}>Discipline</th>
-                      <th className={headerCellClass}>Program</th>
+                      <th className={`${headerCellClassLg} w-16`}>S No</th>
+                      <th className={headerCellClassLg}>Level</th>
+                      <th className={headerCellClassLg}>Discipline</th>
+                      <th className={headerCellClassLg}>Program</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCourses
-                      .filter(
-                        (c) =>
-                          getExtras(c.id).programForConsideration ===
-                          "Yes (For applying course)"
-                      )
-                      .map((course, idx) => (
-                        <tr key={course.id} className={idx % 2 === 0 ? "bg-blue-50" : "bg-white"}>
-                          <td className={cellClass}>{idx + 1}</td>
-                          <td className={cellClass}>
-                            {formatLevelFull(course.level)}
-                          </td>
-                          <td className={cellClass}>
-                            {course.discipline || ""}
-                          </td>
-                          <td className={cellClass}>
-                            {course.programName || ""}
-                          </td>
-                        </tr>
-                      ))}
-                    {filteredCourses.filter(
-                      (c) =>
-                        getExtras(c.id).programForConsideration ===
-                        "Yes (For applying course)"
-                    ).length === 0 && (
+                    {!selectedProgramId ? (
                       <tr>
                         <td
                           colSpan={4}
                           className="border border-gray-300 px-3 py-2 text-sm text-gray-400 text-center"
                         >
-                          No programs marked for consideration
+                          Select a program in the top bar to view Table A8.1
                         </td>
                       </tr>
+                    ) : sanctionedIntakeCourses.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="border border-gray-300 px-3 py-2 text-sm text-gray-400 text-center"
+                        >
+                          No program data found for the selected course
+                        </td>
+                      </tr>
+                    ) : (
+                      sanctionedIntakeCourses.map((course, idx) => (
+                        <tr key={course.id} className={idx % 2 === 0 ? "bg-blue-50" : "bg-white"}>
+                          <td className={cellClassLg}>{idx + 1}</td>
+                          <td className={cellClassLg}>
+                            {formatLevelFull(course.level)}
+                          </td>
+                          <td className={cellClassLg}>
+                            {course.discipline || ""}
+                          </td>
+                          <td className={cellClassLg}>
+                            {course.programName || ""}
+                          </td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
                 </div>
 
                 {/* Table A8.2 - Allied Departments */}
-                <p className="text-xs text-gray-600 mb-1">Table No. A8.2</p>
+                <p className="text-sm text-gray-600 mb-2">Table No. A8.2</p>
                 <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-blue-600 text-white">
-                      <th className={`${headerCellClass} w-16`}>S No</th>
-                      <th className={headerCellClass}>
+                      <th className={`${headerCellClassLg} w-16`}>S No</th>
+                      <th className={headerCellClassLg}>
                         Name of the Department
                       </th>
-                      <th className={headerCellClass}>Name of the Program</th>
-                      <th className={headerCellClass}>
+                      <th className={headerCellClassLg}>Name of the Program</th>
+                      <th className={headerCellClassLg}>
                         Name of Allied Departments/Cluster
                       </th>
-                      <th className={headerCellClass}>
+                      <th className={headerCellClassLg}>
                         Name of Allied Program
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {alliedMappings.length === 0 ? (
+                    {!selectedProgramId ? (
                       <tr>
                         <td
                           colSpan={5}
                           className="border border-gray-300 px-3 py-2 text-sm text-gray-400 text-center"
                         >
-                          No record exist(s)
+                          Select a program in the top bar to view allied departments
                         </td>
                       </tr>
-                    ) : (
-                      alliedMappings.map((mapping, idx) => (
-                        <tr key={mapping.groupId} className={idx % 2 === 0 ? "bg-blue-50" : "bg-white"}>
-                          <td className={cellClass}>{idx + 1}</td>
-                          <td className={cellClass}>
-                            {mapping.mainProgram?.departmentName || ""}
-                          </td>
-                          <td className={cellClass}>
-                            {mapping.mainProgram?.programName || ""}
-                          </td>
-                          <td className={cellClass}>
-                            {(mapping.alliedPrograms || [])
-                              .map((p) => p.departmentName)
-                              .join(", ")}
-                          </td>
-                          <td className={cellClass}>
-                            {(mapping.alliedPrograms || [])
-                              .map((p) => p.programName)
-                              .join(", ")}
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ) : (() => {
+                      // Find the group that contains the selected program (match by programId or programName/programNameId)
+                      const group = alliedMappings.find((g) => {
+                        if (!g.mainProgram) return false;
+                        const main = g.mainProgram;
+                        // match by main.programId (from allied mappings)
+                        if (resolvedSelectedCourse && String(main.programId) === String(resolvedSelectedCourse.id)) return true;
+                        // match by selectedProgramId directly
+                        if (String(main.programId) === String(selectedProgramId)) return true;
+                        // match by programNameId if available
+                        if (resolvedSelectedCourse && main.programNameId && String(main.programNameId) === String(resolvedSelectedCourse.programNameId)) return true;
+                        // match by program name string
+                        if (resolvedSelectedCourse && (main.programName === resolvedSelectedCourse.programName || main.programName === resolvedSelectedCourse.coursename)) return true;
+                        return false;
+                      });
+
+                      if (!group) {
+                        return (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="border border-gray-300 px-3 py-2 text-sm text-gray-400 text-center"
+                            >
+                              No allied departments available for the selected program
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      if (!group.alliedPrograms || group.alliedPrograms.length === 0) {
+                        return (
+                          <tr>
+                            <td className={cellClassLg}>1</td>
+                            <td className={cellClassLg}>{group.mainProgram?.departmentName || ""}</td>
+                            <td className={cellClassLg}>{group.mainProgram?.programName || ""}</td>
+                            <td className={cellClassLg}>Not available</td>
+                            <td className={cellClassLg}>Not available</td>
+                          </tr>
+                        );
+                      }
+
+                      return (
+                        group.alliedPrograms.map((p, idx) => (
+                          <tr key={p.programId} className={idx % 2 === 0 ? "bg-blue-50" : "bg-white"}>
+                            <td className={cellClassLg}>{idx + 1}</td>
+                            <td className={cellClassLg}>{group.mainProgram?.departmentName || ""}</td>
+                            <td className={cellClassLg}>{group.mainProgram?.programName || ""}</td>
+                            <td className={cellClassLg}>{p.departmentName || ""}</td>
+                            <td className={cellClassLg}>{p.programName || ""}</td>
+                          </tr>
+                        ))
+                      );
+                    })()}
                   </tbody>
                 </table>
                 </div>
@@ -1224,12 +1296,12 @@ const PartA = () => {
 
               {/* ---- Tab: Students ---- */}
               {activeTab === "students" && (
-              <div className="mb-8">
-                <p className="text-base font-semibold text-gray-800 mb-2">
-                  10. Total Number of Engineering Students in Various
+              <div className={tabLargeClass}>
+                <p className="text-lg font-semibold text-gray-800 mb-3">
+                   Total Number of Engineering Students in Various<br></br>
                   Departments:
                 </p>
-                <p className="text-xs text-gray-500 italic mb-3">
+                <p className="text-sm text-gray-500 italic mb-4">
                   &lt;To be entered Manually and verified in Criteria 4&gt;
                 </p>
 
@@ -1237,37 +1309,37 @@ const PartA = () => {
                   <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-blue-600 text-white">
-                        <th className={headerCellClass} rowSpan={2}>
+                        <th className={headerCellClassLg} rowSpan={2}>
                           S. No.
                         </th>
-                        <th className={headerCellClass} rowSpan={2}>
+                        <th className={headerCellClassLg} rowSpan={2}>
                           Name of the Department
                         </th>
-                        <th className={headerCellClass} colSpan={3}>
+                        <th className={headerCellClassLg} colSpan={3}>
                           Number of students in the Department (UG and PG)
                         </th>
                         {isEditing && (
-                          <th className={headerCellClass} rowSpan={2}>
+                          <th className={headerCellClassLg} rowSpan={2}>
                             Action
                           </th>
                         )}
                       </tr>
                       <tr className="bg-blue-600 text-white">
-                        <th className={headerCellClass}>
+                        <th className={headerCellClassLg}>
                           CAY
                           <br />
                           <span className="font-normal">
                             {cayLabels.CAY || "—"}
                           </span>
                         </th>
-                        <th className={headerCellClass}>
+                        <th className={headerCellClassLg}>
                           CAYm1
                           <br />
                           <span className="font-normal">
                             {cayLabels.CAYm1 || "—"}
                           </span>
                         </th>
-                        <th className={headerCellClass}>
+                        <th className={headerCellClassLg}>
                           CAYm2
                           <br />
                           <span className="font-normal">
@@ -1289,8 +1361,8 @@ const PartA = () => {
                       ) : (
                         deptStudents.map((dept, idx) => (
                           <tr key={dept.id} className={idx % 2 === 0 ? "bg-blue-50" : "bg-white"}>
-                            <td className={cellClass}>{idx + 1}</td>
-                            <td className={cellClass}>
+                            <td className={cellClassLg}>{idx + 1}</td>
+                            <td className={cellClassLg}>
                               {isEditing ? (
                                 <input
                                   type="text"
@@ -1302,7 +1374,7 @@ const PartA = () => {
                                       e.target.value
                                     )
                                   }
-                                  className={inputClass}
+                                  className={inputClassLg}
                                   placeholder="Department Name"
                                 />
                               ) : (
@@ -1310,7 +1382,7 @@ const PartA = () => {
                               )}
                             </td>
                             {["CAY", "CAYm1", "CAYm2"].map((yr) => (
-                              <td key={yr} className={cellClass}>
+                              <td key={yr} className={cellClassLg}>
                                 {isEditing ? (
                                   <input
                                     type="number"
@@ -1322,7 +1394,7 @@ const PartA = () => {
                                         e.target.value
                                       )
                                     }
-                                    className={inputClass}
+                                    className={inputClassLg}
                                   />
                                 ) : (
                                   dept[yr] || ""
@@ -1330,11 +1402,11 @@ const PartA = () => {
                               </td>
                             ))}
                             {isEditing && (
-                              <td className={cellClass}>
+                              <td className={cellClassLg}>
                                 <button
                                   type="button"
                                   onClick={() => removeDeptStudentRow(idx)}
-                                  className="text-red-500 hover:text-red-700 text-xs"
+                                  className="text-red-500 hover:text-red-700 text-sm"
                                 >
                                   Remove
                                 </button>
@@ -1350,7 +1422,7 @@ const PartA = () => {
                   <button
                     type="button"
                     onClick={addDeptStudentRow}
-                    className="mt-2 text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
+                    className="mt-3 text-blue-600 hover:text-blue-800 hover:underline font-medium text-base bg-transparent border-none cursor-pointer"
                   >
                     + Add Department
                   </button>
@@ -1358,115 +1430,43 @@ const PartA = () => {
               </div>
               )}
 
-              {/* ---- Tab: Vision & Mission ---- */}
-              {activeTab === "visionMission" && (
-              <>
-              <div className="mb-8">
-                <p className="text-base font-semibold text-gray-800 mb-2">
-                  11. Vision of the Institution:
-                </p>
-                {isEditing ? (
-                  <textarea
-                    value={vision}
-                    onChange={(e) => setVision(e.target.value)}
-                    rows={4}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    placeholder="Enter the vision of the institution..."
-                  />
-                ) : (
-                  <div className="border border-gray-200 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                    {vision || "—"}
-                  </div>
-                )}
-              </div>
-
-              {/* ---- Section 12: Mission ---- */}
-              <div className="mb-8">
-                <p className="text-base font-semibold text-gray-800 mb-2">
-                  12. Mission of the Institution:
-                </p>
-                {mission.length === 0 && !isEditing && (
-                  <div className="border border-gray-200 rounded-lg p-3 text-sm text-gray-400">
-                    —
-                  </div>
-                )}
-                {mission.map((line, idx) => (
-                  <div key={idx} className="flex items-start gap-2 mb-2">
-                    {isEditing ? (
-                      <>
-                        <textarea
-                          value={line}
-                          onChange={(e) =>
-                            updateMissionLine(idx, e.target.value)
-                          }
-                          rows={2}
-                          className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeMissionLine(idx)}
-                          className="text-red-500 hover:text-red-700 text-xs mt-2"
-                        >
-                          Remove
-                        </button>
-                      </>
-                    ) : (
-                      <div className="border border-gray-200 rounded-lg p-3 text-sm text-gray-800 flex-1">
-                        {line}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {isEditing && (
-                  <button
-                    type="button"
-                    onClick={addMissionLine}
-                    className="mt-2 text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm bg-transparent border-none cursor-pointer"
-                  >
-                    + Add Mission Statement
-                  </button>
-                )}
-              </div>
-              </>
-              )}
-
               {/* ---- Tab: Contacts ---- */}
               {activeTab === "contacts" && (
-              <div className="mb-8">
-                <p className="text-base font-semibold text-gray-800 mb-4">
+              <div className={tabLargeClass}>
+                <p className="text-lg font-semibold text-gray-800 mb-5">
                   13. Contact Information of the Head of the Institution and NBA
                   coordinator, if designated:
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Head of Institution */}
                   <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                    <p className="text-base font-semibold text-gray-700 mb-3">
                       Head of the Institution
                     </p>
-                    <table className="w-full border-collapse border border-gray-300 text-sm">
+                    <table className="w-full border-collapse border border-gray-300 text-base">
                       <tbody>
                         <tr>
-                          <td className={`${labelCellClass} w-1/3`}>Name</td>
-                          <td className={cellClass}>
+                          <td className={`${labelCellClassLg} w-1/3`}>Name</td>
+                          <td className={cellClassLg}>
                             {profile?.headName || "—"}
                           </td>
                         </tr>
                         <tr>
-                          <td className={labelCellClass}>Designation</td>
-                          <td className={cellClass}>
+                          <td className={labelCellClassLg}>Designation</td>
+                          <td className={cellClassLg}>
                             {profile?.headDesignation || "—"}
                           </td>
                         </tr>
                         <tr>
-                          <td className={labelCellClass}>Mobile No.</td>
-                          <td className={cellClass}>
+                          <td className={labelCellClassLg}>Mobile No.</td>
+                          <td className={cellClassLg}>
                             {profile?.headMobileNo || "—"}
                           </td>
                         </tr>
                         <tr>
-                          <td className={labelCellClass}>Email ID</td>
-                          <td className={cellClass}>
+                          <td className={labelCellClassLg}>Email ID</td>
+                          <td className={cellClassLg}>
                             {profile?.headEmail || "—"}
                           </td>
                         </tr>
@@ -1476,14 +1476,14 @@ const PartA = () => {
 
                   {/* NBA Coordinator */}
                   <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                    <p className="text-base font-semibold text-gray-700 mb-3">
                       NBA Coordinator, If Designated
                     </p>
-                    <table className="w-full border-collapse border border-gray-300 text-sm">
+                    <table className="w-full border-collapse border border-gray-300 text-base">
                       <tbody>
                         <tr>
-                          <td className={`${labelCellClass} w-1/3`}>Name</td>
-                          <td className={cellClass}>
+                          <td className={`${labelCellClassLg} w-1/3`}>Name</td>
+                          <td className={cellClassLg}>
                             {isEditing ? (
                               <input
                                 type="text"
@@ -1494,7 +1494,7 @@ const PartA = () => {
                                     name: e.target.value,
                                   }))
                                 }
-                                className={inputClass}
+                                className={inputClassLg}
                               />
                             ) : (
                               nbaCoordinator.name || "—"
@@ -1502,8 +1502,8 @@ const PartA = () => {
                           </td>
                         </tr>
                         <tr>
-                          <td className={labelCellClass}>Designation</td>
-                          <td className={cellClass}>
+                          <td className={labelCellClassLg}>Designation</td>
+                          <td className={cellClassLg}>
                             {isEditing ? (
                               <input
                                 type="text"
@@ -1514,7 +1514,7 @@ const PartA = () => {
                                     designation: e.target.value,
                                   }))
                                 }
-                                className={inputClass}
+                                className={inputClassLg}
                               />
                             ) : (
                               nbaCoordinator.designation || "—"
@@ -1522,8 +1522,8 @@ const PartA = () => {
                           </td>
                         </tr>
                         <tr>
-                          <td className={labelCellClass}>Mobile No.</td>
-                          <td className={cellClass}>
+                          <td className={labelCellClassLg}>Mobile No.</td>
+                          <td className={cellClassLg}>
                             {isEditing ? (
                               <input
                                 type="text"
@@ -1534,7 +1534,7 @@ const PartA = () => {
                                     mobileNo: e.target.value,
                                   }))
                                 }
-                                className={inputClass}
+                                className={inputClassLg}
                               />
                             ) : (
                               nbaCoordinator.mobileNo || "—"
@@ -1542,8 +1542,8 @@ const PartA = () => {
                           </td>
                         </tr>
                         <tr>
-                          <td className={labelCellClass}>Email ID</td>
-                          <td className={cellClass}>
+                          <td className={labelCellClassLg}>Email ID</td>
+                          <td className={cellClassLg}>
                             {isEditing ? (
                               <input
                                 type="text"
@@ -1554,7 +1554,7 @@ const PartA = () => {
                                     emailId: e.target.value,
                                   }))
                                 }
-                                className={inputClass}
+                                className={inputClassLg}
                               />
                             ) : (
                               nbaCoordinator.emailId || "—"
