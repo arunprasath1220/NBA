@@ -18,7 +18,6 @@ const TopBar = () => {
       "/faculty-department": "Faculty by Department",
       "/faculty-allied": "Faculty by Allied Dept.",
       "/ratio-department": "Faculty Student Ratio by Dept.",
-      "/ratio-allied": "Faculty Student Ratio by Allied",
     };
     return pathMap[location.pathname] || "Dashboard";
   };

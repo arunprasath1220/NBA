@@ -110,7 +110,6 @@ const Navbar = () => {
         { name: "Student Details by Dept.", path: "/students-department", icon: Icons.users },
         { name: "Student Details by Allied Dept.", path: "/students-allied", icon: Icons.user },
         { name: "Faculty Student Ratio by Dept.", path: "/ratio-department", icon: Icons.chart },
-        { name: "Faculty Student Ratio by Allied", path: "/ratio-allied", icon: Icons.ratio },
       ],
     },
   ];

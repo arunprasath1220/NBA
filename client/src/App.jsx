@@ -13,7 +13,6 @@ import StudentsIntake from "./pages/StudentsIntake";
 import FacultyByDepartment from "./pages/FacultyByDepartment";
 import FacultyByAllied from "./pages/FacultyByAllied";
 import RatioByDepartment from "./pages/RatioByDepartment";
-import RatioByAllied from "./pages/RatioByAllied";
 import StudentsByDepartment from "./pages/StudentsByDepartment";
 import StudentsByAllied from "./pages/StudentsByAllied";
 import SARPartA from "./pages/SARPartA";
@@ -120,26 +119,18 @@ function App() {
           }
         />
         <Route
-          path="/ratio-allied"
+          path="/sar/part-a"
           element={
             <ProtectedRoute>
-              <RatioByAllied />
-                    <Route
-                      path="/sar/part-a"
-                      element={
-                        <ProtectedRoute>
-                          <SARPartA />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/sar/part-b/criteria-:num"
-                      element={
-                        <ProtectedRoute>
-                          <SARCriteria />
-                        </ProtectedRoute>
-                      }
-                    />
+              <SARPartA />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sar/part-b/criteria-:num"
+          element={
+            <ProtectedRoute>
+              <SARCriteria />
             </ProtectedRoute>
           }
         />
